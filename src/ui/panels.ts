@@ -144,6 +144,12 @@ export function mountProperties(el: HTMLElement, ed: Editor, sliders: SliderMoti
         c.data = Object.keys(data).length ? data : undefined;
         if (!c.data) delete c.data;
       });
+    } else if (field === "cyclePath") {
+      ed.change((doc) => (input.checked ? delete doc.motion.hideCycle : (doc.motion.hideCycle = true)));
+    } else if (field === "trail") {
+      const v = parseFloat(input.value);
+      if (Number.isFinite(v) && v >= 0) ed.change((doc) => (doc.motion.trail = v));
+      input.blur();
     } else if (field === "trace") {
       toggleTrace(ed, id);
     } else if (field === "ground") {

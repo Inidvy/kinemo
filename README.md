@@ -63,6 +63,7 @@ Select geometry and press G to group it into one rigid body. A body fixed at one
 | ← → ↑ ↓ | Hold to move the first and second slider (each slider's keys can be changed in its panel, also to a combination like 1 + ←) |
 | Del | Delete the selected joint's slider |
 | T | Trace path: click a point of a bar to draw the path it follows |
+| Ctrl+C / Ctrl+V / Ctrl+X / Ctrl+D | Copy, paste at the pointer, cut, duplicate (Sketch) |
 | K | Set keyframes at the playhead |
 | Space | Play or pause the timeline |
 
@@ -76,7 +77,11 @@ Live dimensions: tick "Watch" on any dimension. It stops setting the sketch and 
 
 Path tracing: with the Trace tool (T), click a point of a bar, or tick "Trace path" on a joint. Its path over a whole cycle is drawn: the timeline clip if it has keys, otherwise the first slider over its range (a full turn for a crank).
 
-Timeline: in Motion mode a timeline sits above the tabs, with a row per slider. Move sliders and press K to set keys (◆) at the playhead for the sliders you moved (and those that already have keys). Space plays. Segments ease in and out; right-click a key or segment for a steady speed. Drag keys to retime them, double-click to delete, or select one to type its time and value (a crank can be keyed past 360° for full turns). The clip has a length, and plays once, loops or ping-pongs. Sliders without keys stay free while it plays.
+Traced points also leave a live trail as they move, by dragging, sliders or playing, which fades after a few seconds (set in the right panel; 0 turns it off). The whole-cycle path can be switched off there too.
+
+Copy and paste: in Sketch mode Ctrl+C copies the selection (lines, arcs, circles, points, or whole bodies) with the constraints between them, Ctrl+V pastes it at the pointer, Ctrl+X cuts and Ctrl+D duplicates. Copies can be pasted into another tab of the app.
+
+Timeline: the Animation tab (next to Sketch and Motion) opens the timeline above the tabs, with a row per slider. Move sliders and press K to set keys (◆) at the playhead for the sliders you moved (and those that already have keys). Space plays. Segments ease in and out; right-click a key or segment for a steady speed. Drag keys to retime them, double-click to delete, or select one to type its time and value (a crank can be keyed past 360° for full turns). The clip has a length, and plays once, loops or ping-pongs. Sliders without keys stay free while it plays. Below the keys, "Over time" charts every slider and watched dimension across the clip (angles count on past 360° for a turning crank), with the value at the playhead. Export video records one whole cycle of the canvas (MP4 where the browser supports it, otherwise WebM), and Export CSV saves the charted values.
 
 Sliders ease smoothly to a new value. A slider for a joint that goes round (a crank, a full circle, a closed track) doesn't stop at its ends: dragging past the end of the bar carries on round by as far as you drag; hold ◀ ▶ or a slider's keys to keep it moving. When a slider or a drag asks for more than the mechanism can do, it stops at the last pose that works. The feature list shows the mechanism's degrees of freedom.
 

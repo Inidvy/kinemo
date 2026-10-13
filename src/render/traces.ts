@@ -36,17 +36,81 @@ function pathsFor(ed: Editor): Map<Id, Vec[]> | null {
   return cache?.paths ?? null;
 }
 
+/** Where each traced point has been lately, for the fading trail. */
+const trails = new Map<Id, { t: number; p: Vec }[]>();
+let fadeFrame = 0;
+
+/** Record where traced points are now and drop what is older than the trail lasts. */
+function updateTrails(ed: Editor, now: number): number {
+  const doc = ed.doc;
+  const keep = (doc.motion.trail ?? 2) * 1000;
+  const owner = ownerMap(doc);
+  const traces = new Set(doc.motion.traces ?? []);
+  for (const id of trails.keys()) if (!traces.has(id) || !keep) trails.delete(id);
+  if (!keep) return 0;
+  for (const id of traces) {
+    const pt = doc.points[id];
+    if (!pt) continue;
+    const p = applyPose(poseOf(doc, owner.get(id)), pt);
+    const list = trails.get(id) ?? [];
+    const last = list[list.length - 1];
+    if (!last || Math.hypot(last.p.x - p.x, last.p.y - p.y) > 1e-9) list.push({ t: now, p });
+    while (list.length > 1 && now - list[0].t > keep) list.shift();
+    trails.set(id, list);
+  }
+  return keep;
+}
+
+function drawTrails(ctx: CanvasRenderingContext2D, ed: Editor, now: number, keep: number) {
+  const v = ed.view;
+  let fading = false;
+  ctx.save();
+  ctx.strokeStyle = colors.trace;
+  ctx.lineWidth = 3;
+  ctx.lineCap = "round";
+  for (const list of trails.values()) {
+    for (let i = 1; i < list.length; i++) {
+      // Fades out over the trail's lifetime, measured from when the point was there.
+      const age = (now - list[i].t) / keep;
+      if (age >= 1) continue;
+      fading = true;
+      ctx.globalAlpha = 0.85 * (1 - age);
+      const a = v.toScreen(list[i - 1].p), b = v.toScreen(list[i].p);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+  // Keep redrawing until the trail has faded away.
+  if (fading && !fadeFrame) {
+    fadeFrame = requestAnimationFrame(() => {
+      fadeFrame = 0;
+      ed.redraw();
+    });
+  }
+}
+
 export function drawTraces(ctx: CanvasRenderingContext2D, ed: Editor): void {
   const doc = ed.doc;
   const traces = doc.motion.traces ?? [];
-  if (!traces.length) return;
+  if (!traces.length) {
+    trails.clear();
+    return;
+  }
   const v = ed.view;
-  const paths = pathsFor(ed);
+  const now = performance.now();
+  const keep = updateTrails(ed, now);
+  if (keep) drawTrails(ctx, ed, now, keep);
+  const paths = doc.motion.hideCycle ? null : pathsFor(ed);
   ctx.save();
   ctx.strokeStyle = colors.trace;
   ctx.fillStyle = colors.trace;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 1.5;
   ctx.lineJoin = "round";
+  // The whole-cycle path is a thin guide under the live trail.
+  ctx.globalAlpha = 0.55;
   if (paths) {
     for (const id of traces) {
       const pts = paths.get(id);
@@ -60,6 +124,7 @@ export function drawTraces(ctx: CanvasRenderingContext2D, ed: Editor): void {
       ctx.stroke();
     }
   }
+  ctx.globalAlpha = 1;
   // Where each traced point is now.
   const owner = ownerMap(doc);
   for (const id of traces) {

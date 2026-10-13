@@ -5,6 +5,18 @@ import { clipTime, DEFAULT_TIMELINE, setKey, timelineOf, valueAt, valuesAt } fro
 import { t } from "../i18n";
 import { icons } from "./icons";
 import { driverName } from "./motionPanels";
+import { chartSeries, drawSeries, fmtValue, valueOn, type Series } from "./chart";
+
+/** Line colours for the chart, one per series. */
+const PALETTE = ["#2069e0", "#d81b60", "#0b8a7a", "#f28c18", "#8e44ad", "#5f6b7a"];
+
+function download(blob: Blob, name: string) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -56,13 +68,40 @@ export class Player {
     this.frame = 0;
     this.snapshot();
     this.ed.endDrag();
+    const done = this.onCycle;
+    this.onCycle = undefined;
+    this.cycle = 0;
+    done?.();
+  }
+
+  /** While recording: how long one whole cycle runs, and what to do after it. */
+  private cycle = 0;
+  private onCycle?: () => void;
+
+  /** Play one whole cycle from the start (there and back for ping-pong), then call `done`. */
+  playCycle(done: () => void): boolean {
+    const tl = timelineOf(this.ed.doc);
+    if (this.playing) this.stop();
+    this.time = 0;
+    this.pose(0);
+    this.play();
+    if (!this.playing) return false;
+    this.cycle = tl.mode === "pingpong" ? 2 * tl.length : tl.length;
+    this.onCycle = done;
+    return true;
   }
 
   private tick(now: number) {
     const ed = this.ed;
     if (ed.mode !== "motion") return this.stop();
     const tl = timelineOf(ed.doc);
-    const { t: time, done } = clipTime(this.offset + (now - this.started) / 1000, tl);
+    const elapsed = this.offset + (now - this.started) / 1000;
+    if (this.cycle && elapsed >= this.cycle) {
+      this.time = tl.mode === "pingpong" ? 0 : tl.length;
+      this.pose(this.time);
+      return this.stop();
+    }
+    const { t: time, done } = clipTime(elapsed, tl);
     this.time = time;
     this.pose(time);
     if (done) return this.stop();
@@ -165,7 +204,9 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
   const p = (player = new Player(ed));
   /** The selected key: slider and index into its keys. */
   let sel: { driver: Id; i: number } | null = null;
-  let lastMode = ed.mode;
+  let lastOpen = false;
+  /** A video being recorded. */
+  let recording: MediaRecorder | null = null;
 
   const lanes = () => el.querySelector<HTMLElement>(".tl-lanes");
   const timeAt = (clientX: number) => {
@@ -180,12 +221,13 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
   };
 
   const update = () => {
-    if (ed.mode !== lastMode) {
-      lastMode = ed.mode;
+    const open = ed.mode === "motion" && ed.animation;
+    if (open !== lastOpen) {
+      lastOpen = open;
       p.stop();
-      if (ed.mode === "motion") p.snapshot();
+      if (open) p.snapshot();
     }
-    el.hidden = ed.mode !== "motion";
+    el.hidden = !open;
     if (el.hidden) return;
     const doc = ed.doc;
     const tl = timelineOf(doc);
@@ -219,6 +261,16 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
         return `${label}<div class="tl-lane" data-driver="${d.id}">${diamonds}</div>`;
       })
       .join("");
+    const series = chartSeries(ed);
+    const chart = series?.length
+      ? `<div class="tl-name tl-section">${t("chart.title")}</div><div class="tl-section"></div>` +
+        series
+          .map(
+            (s, i) =>
+              `<div class="tl-name tl-chart-name" data-pick="${doc.motion.drivers[s.id]?.joint ?? s.id}" title="${esc(s.label)}"><span class="tl-dot" style="background:${PALETTE[i % PALETTE.length]}"></span>${esc(s.label)}<b data-series="${i}">${fmtValue(s, valueOn(s, p.time))}</b></div><div class="tl-lane tl-chart"><canvas data-chart="${i}"></canvas></div>`,
+          )
+          .join("")
+      : "";
     const k = sel && tl.keys[sel.driver][sel.i];
     const editor = k
       ? `<span class="tl-keyedit">
@@ -238,14 +290,25 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
         </select>
         <button class="btn tl-keybtn" data-tl="key" title="${t("timeline.keyTip")}">${icons.key}${t("timeline.key")}<kbd>K</kbd></button>
         ${editor}
+        <span class="tl-export">
+          <button class="btn" data-tl="video" title="${t("export.videoTip")}">${recording ? t("export.recording") : t("export.video")}</button>
+          <button class="btn" data-tl="csv" title="${t("export.csvTip")}">${t("export.csv")}</button>
+        </span>
       </div>
       <div class="tl-body">
         <div class="tl-name tl-corner"></div>
         <div class="tl-lanes tl-ruler">${ticks.join("")}</div>
         ${rows}
+        ${chart}
         <div class="tl-playhead-wrap"><div class="tl-playhead" style="left:${pct(p.time)}"></div></div>
       </div>`;
+    shown = series ?? [];
+    for (const c of el.querySelectorAll<HTMLCanvasElement>("canvas[data-chart]")) {
+      const i = Number(c.dataset.chart);
+      drawSeries(c, shown[i], tl.length, PALETTE[i % PALETTE.length]);
+    }
   };
+  let shown: Series[] = [];
 
   /** Just the playhead and time readout. */
   const patch = () => {
@@ -254,6 +317,49 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
     if (head) head.style.left = `${(Math.min(tl.length, p.time) / tl.length) * 100}%`;
     const time = el.querySelector<HTMLElement>(".tl-time");
     if (time) time.textContent = `${p.time.toFixed(2)} s`;
+    for (const b of el.querySelectorAll<HTMLElement>("[data-series]")) {
+      const s = shown[Number(b.dataset.series)];
+      if (s) b.textContent = fmtValue(s, valueOn(s, p.time));
+    }
+  };
+
+  /** Record one whole cycle of the canvas as a video and download it. */
+  const recordVideo = () => {
+    if (recording) {
+      p.stop();
+      return;
+    }
+    const canvas = document.querySelector<HTMLCanvasElement>("#canvas");
+    if (!canvas || typeof MediaRecorder === "undefined" || !canvas.captureStream) return ed.flash(t("export.noVideo"));
+    const type = ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9", "video/webm"].find((x) => MediaRecorder.isTypeSupported(x));
+    if (!type) return ed.flash(t("export.noVideo"));
+    const rec = new MediaRecorder(canvas.captureStream(60), { mimeType: type, videoBitsPerSecond: 8_000_000 });
+    const chunks: Blob[] = [];
+    rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+    rec.onstop = () => {
+      recording = null;
+      download(new Blob(chunks, { type }), `mechanism.${type.startsWith("video/mp4") ? "mp4" : "webm"}`);
+      ed.emit();
+    };
+    ed.select([]);
+    recording = rec;
+    rec.start();
+    // Hold the first pose a moment so the video doesn't start mid-movement.
+    p.time = 0;
+    if (!p.playCycle(() => setTimeout(() => rec.state !== "inactive" && rec.stop(), 300))) {
+      recording = null;
+      rec.stop();
+    }
+  };
+
+  /** The chart's numbers as a spreadsheet file. */
+  const exportCsv = () => {
+    const series = chartSeries(ed);
+    if (!series?.length) return ed.flash(t("timeline.noKeys"));
+    const head = ["time (s)", ...series.map((s) => `${s.label} (${s.unit === "deg" ? "deg" : "mm"})`)];
+    const rows = series[0].times.map((time, i) => [time.toFixed(4), ...series.map((s) => (s.values[i] ?? NaN).toFixed(4))]);
+    const csv = [head, ...rows].map((r) => r.map((c) => (/[",\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c)).join(",")).join("\n");
+    download(new Blob([csv], { type: "text/csv" }), "mechanism.csv");
   };
 
   const editTimeline = (fn: (tl: Timeline) => void) =>
@@ -271,6 +377,8 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
       b.blur();
       if (what === "play") p.toggle();
       if (what === "key") p.key();
+      if (what === "video") recordVideo();
+      if (what === "csv") exportCsv();
       if (what === "kdel" && sel) {
         const s = sel;
         sel = null;

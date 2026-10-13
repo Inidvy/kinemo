@@ -38,10 +38,15 @@ async function main() {
   const tabs = $("#tabs");
   tabs.innerHTML = `
     <button class="tab on" data-mode="sketch" title="Tab">${svgIcon(iconPaths.sketch, 14)} ${t("tab.sketch")}</button>
-    <button class="tab" data-mode="motion" title="Tab">${svgIcon(iconPaths.motion, 14)} ${t("tab.motion")}</button>`;
+    <button class="tab" data-mode="motion" title="Tab">${svgIcon(iconPaths.motion, 14)} ${t("tab.motion")}</button>
+    <button class="tab" data-mode="animation">${svgIcon(iconPaths.play, 14)} ${t("tab.animation")}</button>`;
   tabs.addEventListener("click", (e) => {
     const b = (e.target as HTMLElement).closest<HTMLElement>("[data-mode]");
-    if (b) switchMode(ed, b.dataset.mode as "sketch" | "motion");
+    if (!b) return;
+    const tab = b.dataset.mode!;
+    ed.animation = tab === "animation";
+    switchMode(ed, tab === "sketch" ? "sketch" : "motion");
+    ed.emit();
   });
 
   const status = $("#status");
@@ -50,7 +55,8 @@ async function main() {
     const tool = tools.find(ed.tool);
     status.textContent = ed.message || tool?.hintText?.(ed) || t(tool?.hint ?? "");
     status.classList.toggle("flash", !!ed.message);
-    for (const b of tabs.querySelectorAll<HTMLElement>("[data-mode]")) b.classList.toggle("on", b.dataset.mode === ed.mode);
+    const tab = ed.mode === "motion" && ed.animation ? "animation" : ed.mode;
+    for (const b of tabs.querySelectorAll<HTMLElement>("[data-mode]")) b.classList.toggle("on", b.dataset.mode === tab);
     clearTimeout(saveTimer);
     saveTimer = window.setTimeout(() => autosave(ed.doc), 400);
   });

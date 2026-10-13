@@ -2,7 +2,7 @@ import type { Id, SketchDoc, Vec } from "../core/model";
 import { applyPose, ownerMap } from "./bodies";
 import { jointKinds } from "./joints";
 import { Mechanism } from "./kinematics";
-import { timelineOf, valuesAt } from "./timeline";
+import { sampleClip } from "./clip";
 
 /**
  * The paths traced points follow over a whole cycle of the mechanism: the
@@ -19,20 +19,10 @@ export function sweepPaths(doc: SketchDoc): Map<Id, Vec[]> {
   const where = (q: number[]) => traces.map((id) => applyPose(m.pose(q, owner.get(id) ?? ""), doc.points[id]));
   const runs: number[][][] = [];
 
-  const tl = timelineOf(doc);
   const drivers = Object.values(doc.motion.drivers);
-  if (Object.values(tl.keys).some((k) => k.length)) {
-    const qs: number[][] = [];
-    let q = m.current();
-    const N = 120;
-    for (let i = 0; i <= N; i++) {
-      const targets = valuesAt(tl, (tl.length * i) / N).flatMap(({ driver, value }) => (doc.motion.drivers[driver] ? [{ joint: doc.motion.drivers[driver].joint, value }] : []));
-      const r = m.driveAll(targets, q);
-      if (!r.reached && i > 0) break;
-      q = r.q;
-      qs.push(q);
-    }
-    runs.push(qs);
+  const clip = sampleClip(doc);
+  if (clip) {
+    runs.push(clip.qs);
   } else if (drivers.length) {
     const d = drivers[0];
     const j = m.joint(d.joint);

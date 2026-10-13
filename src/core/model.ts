@@ -118,6 +118,10 @@ export interface MotionState {
   drivers: Record<Id, Driver>;
   /** Points whose path is drawn in Motion mode. */
   traces?: Id[];
+  /** Don't draw a traced point's path over a whole cycle. */
+  hideCycle?: boolean;
+  /** Seconds a traced point's trail stays before it fades (0: no trail; default 2). */
+  trail?: number;
   timeline?: Timeline;
 }
 

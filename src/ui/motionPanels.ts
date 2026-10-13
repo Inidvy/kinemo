@@ -146,6 +146,14 @@ export function motionProps(ed: Editor): string {
   html += `<div class="panel-title">${t("panel.sliders")}</div>`;
   html += drivers.length ? drivers.map((d) => sliderRow(ed, d)).join("") : `<p class="muted">${t("motion.noSliders")}</p>`;
 
+  const traces = doc.motion.traces ?? [];
+  if (traces.length) {
+    html += `<div class="panel-title">${t("trace.title")} <span class="count">${traces.length}</span></div>
+      <label class="check"><input type="checkbox" data-field="cyclePath" data-id="" ${doc.motion.hideCycle ? "" : "checked"}> ${t("trace.cycle")}</label>
+      <label class="field">${t("trace.trail")}<input type="number" min="0" step="0.5" data-field="trail" data-id="" value="${doc.motion.trail ?? 2}"></label>
+      <button class="btn" data-clear-traces="1">${icons.delete}${t("trace.clear")}</button>`;
+  }
+
   const sel = [...ed.selection];
   if (sel.length === 1 && doc.bodies[sel[0]]) {
     html += `<div class="panel-title">${t("panel.properties")}</div>` + bodyProps(ed, doc.bodies[sel[0]]);
@@ -197,6 +205,7 @@ export function wireMotionPanel(el: HTMLElement, ed: Editor, sliders: SliderMoti
       const j = ed.mech.joint(add.dataset.addDriver!);
       if (j) ed.change((doc) => addDriver(doc, j.id, j.a, j.b));
     }
+    if (target.closest("[data-clear-traces]")) ed.change((doc) => delete doc.motion.traces);
     const cap = target.closest<HTMLElement>("[data-keycap]");
     if (cap) {
       capturing = { driver: cap.dataset.keycap!, index: Number(cap.dataset.index) };

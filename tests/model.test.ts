@@ -33,3 +33,27 @@ describe("model", () => {
     expect(() => parseDoc("{}")).toThrow();
   });
 });
+
+describe("clipboard", () => {
+  it("copies geometry with the constraints between it and pastes it with new ids", async () => {
+    const { copyItems, pasteClip } = await import("../src/core/clipboard");
+    const { addConstraint, addGeom, addPoint, emptyDoc } = await import("../src/core/model");
+    const doc = emptyDoc();
+    const a = addPoint(doc, 0, 0), b = addPoint(doc, 10, 0), c = addPoint(doc, 50, 0);
+    const l = addGeom<Line>(doc, { kind: "line", p1: a, p2: b });
+    const m = addGeom<Line>(doc, { kind: "line", p1: b, p2: c });
+    addConstraint(doc, { type: "horizontal", refs: [l] });
+    addConstraint(doc, { type: "fix", refs: [a], data: { x: 0, y: 0 } });
+    addConstraint(doc, { type: "parallel", refs: [l, m] });
+    doc.bodies.b1 = { id: "b1", name: "Body 1", members: [l] };
+    const clip = copyItems(doc, [l])!;
+    expect(clip.constraints.map((x) => x.type).sort()).toEqual(["fix", "horizontal"]);
+    const ids = pasteClip(doc, clip, { x: 5, y: 5 }, (_d, name) => `${name} copy`);
+    expect(ids).toHaveLength(1);
+    const g = doc.geoms[ids[0]];
+    expect(g.kind === "line" && doc.points[g.p1]).toMatchObject({ x: 5, y: 5 });
+    expect(Object.values(doc.constraints).find((x) => x.type === "fix" && x.refs[0] !== a)!.data).toEqual({ x: 5, y: 5 });
+    expect(Object.values(doc.bodies).map((x) => x.name)).toEqual(["Body 1", "Body 1 copy"]);
+    expect(Object.keys(doc.geoms)).toHaveLength(3);
+  });
+});

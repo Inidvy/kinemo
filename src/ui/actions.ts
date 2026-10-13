@@ -1,4 +1,5 @@
 import { Registry } from "../core/registry";
+import { clipCenter, copyItems, pasteClip, type Clip } from "../core/clipboard";
 import { addConstraint, addPoint, arcRadius, deleteItems, emptyDoc, geomPoints, type Id, type SketchDoc, type Vec } from "../core/model";
 import type { Editor, Mode } from "../app/editor";
 import { applyPose, nextBodyName, ownerMap, poseOf } from "../motion/bodies";
@@ -52,6 +53,55 @@ function selectedBodies(ed: Editor): Id[] {
 }
 
 const SKETCH: Mode[] = ["sketch"];
+
+/** What Ctrl+C copied, and how often it has been pasted since (each paste lands a bit further along). */
+let clip: { items: Clip; pasted: number } | null = null;
+const CLIP_KEY = "kinemo.clipboard";
+
+/** Keys and playing belong to the Animation tab: open it first. */
+function openAnimation(ed: Editor): boolean {
+  if (!ed.animation) {
+    ed.animation = true;
+    ed.emit();
+  }
+  return true;
+}
+
+function copy(ed: Editor): boolean {
+  const items = copyItems(ed.doc, [...ed.selection]);
+  if (!items) {
+    ed.flash(t("clip.nothing"));
+    return false;
+  }
+  clip = { items, pasted: 0 };
+  // Other tabs of the app can paste it too.
+  try {
+    localStorage.setItem(CLIP_KEY, JSON.stringify(items));
+  } catch {
+    /* storage full or blocked: this tab still has it */
+  }
+  ed.flash(t("clip.copied", { n: items.geoms.length + items.points.filter((p) => !items.geoms.some((g) => geomPoints(g).includes(p.id))).length }));
+  return true;
+}
+
+function paste(ed: Editor): void {
+  try {
+    const stored = localStorage.getItem(CLIP_KEY);
+    if (stored && stored !== JSON.stringify(clip?.items)) clip = { items: JSON.parse(stored) as Clip, pasted: 0 };
+  } catch {
+    /* use what this tab has */
+  }
+  if (!clip?.items.points.length) return ed.flash(t("clip.empty"));
+  const c = clip;
+  const center = clipCenter(c.items);
+  c.pasted++;
+  // At the pointer when it is over the canvas, otherwise a step down and right of the original.
+  const step = ed.view.px(24) * c.pasted;
+  const offset = ed.cursor ? { x: ed.cursor.x - center.x, y: ed.cursor.y - center.y } : { x: step, y: -step };
+  let ids: Id[] = [];
+  ed.change((doc) => (ids = pasteClip(doc, c.items, offset, (d, name) => nextBodyName(d, name))));
+  ed.select(ids);
+}
 const MOTION: Mode[] = ["motion"];
 
 const builtins: Action[] = [
@@ -78,6 +128,10 @@ const builtins: Action[] = [
   { id: "backspace", label: "action.delete", icon: icons.delete, shortcut: "backspace", run: (ed) => actions.get("delete").run(ed) },
   { id: "undo", label: "action.undo", icon: icons.undo, shortcut: "z", ctrl: true, shift: false, group: "edit", run: (ed) => ed.undo() },
   { id: "redo", label: "action.redo", icon: icons.redo, shortcut: "y", ctrl: true, group: "edit", run: (ed) => ed.redo() },
+  { id: "copy", label: "action.copy", icon: icons.new, shortcut: "c", ctrl: true, modes: SKETCH, run: copy },
+  { id: "cut", label: "action.cut", icon: icons.delete, shortcut: "x", ctrl: true, modes: SKETCH, run: (ed) => copy(ed) && actions.get("delete").run(ed) },
+  { id: "paste", label: "action.paste", icon: icons.new, shortcut: "v", ctrl: true, modes: SKETCH, run: paste },
+  { id: "duplicate", label: "action.duplicate", icon: icons.new, shortcut: "d", ctrl: true, modes: SKETCH, run: (ed) => copy(ed) && paste(ed) },
   { id: "redo2", label: "action.redo", icon: icons.redo, shortcut: "z", ctrl: true, shift: true, run: (ed) => ed.redo() },
   {
     id: "icons",
@@ -216,10 +270,10 @@ const builtins: Action[] = [
       if (!ed.flip()) ed.flash(t("motion.noFlip"));
     },
   },
-  { id: "keyframe", label: "timeline.key", icon: icons.key, shortcut: "k", modes: MOTION, run: () => timelinePlayer()?.key() },
-  { id: "play", label: "timeline.play", icon: icons.play, shortcut: " ", modes: MOTION, run: () => timelinePlayer()?.toggle() },
+  { id: "keyframe", label: "timeline.key", icon: icons.key, shortcut: "k", modes: MOTION, run: (ed) => openAnimation(ed) && timelinePlayer()?.key() },
+  { id: "play", label: "timeline.play", icon: icons.play, shortcut: " ", modes: MOTION, run: (ed) => openAnimation(ed) && timelinePlayer()?.toggle() },
   { id: "resetPose", label: "action.resetPose", icon: icons.reset, shortcut: "r", shift: false, group: "motion", modes: MOTION, run: (ed) => ed.resetPose() },
-  { id: "mode", label: "action.mode", icon: icons.motion, shortcut: "tab", run: (ed) => switchMode(ed, ed.mode === "sketch" ? "motion" : "sketch") },
+  { id: "mode", label: "action.mode", icon: icons.motion, shortcut: "tab", run: (ed) => ((ed.animation = false), switchMode(ed, ed.mode === "sketch" ? "motion" : "sketch")) },
 ];
 builtins.forEach((a) => actions.register(a));
 

@@ -35,8 +35,14 @@ export class Editor {
   readonly view = new View();
   selection = new Set<Id>();
   hover: Id | null = null;
+  /** Where the pointer is over the canvas (world coordinates), or null when it is elsewhere. */
+  cursor: { x: number; y: number } | null = null;
   tool = "select";
   mode: Mode = "sketch";
+  /** In Motion mode: the Animation tab (timeline, chart, export) is open. */
+  animation = false;
+  /** Redraw the canvas only (set by the canvas), for things that change on their own like a fading trail. */
+  redraw: () => void = () => this.emit();
   message = "";
   /** Set by the UI: open the value editor for a dimension. */
   onEditDimension?: (cid: Id) => void;

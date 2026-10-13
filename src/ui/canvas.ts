@@ -25,6 +25,7 @@ export function mountCanvas(canvas: HTMLCanvasElement, ed: Editor): void {
     });
   };
   ed.subscribe(redraw);
+  ed.redraw = redraw;
   new ResizeObserver(redraw).observe(canvas);
 
   const screenOf = (e: PointerEvent | WheelEvent | MouseEvent): Vec => {
@@ -98,6 +99,8 @@ export function mountCanvas(canvas: HTMLCanvasElement, ed: Editor): void {
     ed.emit();
   });
 
+  canvas.addEventListener("pointerleave", () => (ed.cursor = null));
+
   canvas.addEventListener("pointermove", (e) => {
     const s = screenOf(e);
     if (e.pointerType === "touch" && touches.has(e.pointerId)) {
@@ -120,6 +123,7 @@ export function mountCanvas(canvas: HTMLCanvasElement, ed: Editor): void {
       return;
     }
     const ev = event(e);
+    ed.cursor = ev.world;
     const h = ev.hit;
     const hover = h?.id ?? null;
     if (hover !== ed.hover) ed.hover = hover;
