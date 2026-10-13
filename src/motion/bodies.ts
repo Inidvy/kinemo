@@ -28,7 +28,7 @@ export function bodyFixedPoints(doc: SketchDoc): Map<Id, Id[]> {
   if (out) return out;
   out = new Map();
   const own = ownerMap(doc);
-  const fixed = new Set(Object.values(doc.constraints).filter((c) => c.type === "fix").map((c) => c.refs[0]));
+  const fixed = new Set(Object.values(doc.constraints).filter((c) => c.type === "groundPoint").map((c) => c.refs[0]));
   const add = (p: Id) => {
     const b = own.get(p);
     if (!b) return;

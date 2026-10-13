@@ -9,7 +9,7 @@ export const coincident: ConstraintType = {
   id: "coincident",
   label: "c.coincident",
   glyph: "●",
-  shortcut: "e",
+  shortcut: "b",
   fromSelection(doc, sel) {
     const { points, geoms } = split(doc, sel);
     if (geoms.length === 1 && points.length >= 1) return points.map((p) => ({ type: "onCurve", refs: [p, geoms[0].id] }));

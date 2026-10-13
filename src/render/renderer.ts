@@ -6,7 +6,7 @@ import { colors } from "./style";
 import { ICON, isWatched, layoutDims, layoutIcons, linearOffset, type DimLayout } from "./layout";
 import type { View } from "./view";
 import { drawConstraintIcon } from "../ui/icons";
-import { drawBodies, drawJoints, drawLooseGeometry } from "./bars";
+import { drawBodies, drawJointLetters, drawJoints, drawLooseGeometry } from "./bars";
 import { posedDoc } from "../motion/bodies";
 import { drawTraces } from "./traces";
 
@@ -25,6 +25,7 @@ export function render(ctx: CanvasRenderingContext2D, ed: Editor, w: number, h: 
     drawBodies(ctx, ed, { posed: true, alpha: 1, hover: ed.hover });
     drawTraces(ctx, ed);
     drawJoints(ctx, ed);
+    drawJointLetters(ctx, ed);
     // Watched dimensions, measured where the bodies are now.
     const posed = posedDoc(doc);
     for (const d of layoutDims(posed, v, true)) drawDimension(ctx, v, d, ed.selection.has(d.cid), ed.hover === d.cid, null, colors.watch);

@@ -1,4 +1,4 @@
-import { DOC_VERSION, emptyDoc, type SketchDoc } from "../core/model";
+import { DOC_VERSION, emptyDoc, geomPoints, type SketchDoc } from "../core/model";
 import { t } from "../i18n";
 
 const AUTOSAVE_KEY = "kinemo.autosave";
@@ -10,6 +10,21 @@ const AUTOSAVE_KEY = "kinemo.autosave";
 const migrations: Record<number, (d: Record<string, unknown>) => void> = {
   // Version 2 added bodies and motion state; empty ones are filled in below.
   1: () => {},
+  // Version 3 split Fix (sketch only) from ground points (fixed pivots in
+  // Motion mode). A Fix that made a fixed pivot before becomes a ground point.
+  2: (d) => {
+    const doc = d as unknown as SketchDoc;
+    const owned = new Set<string>();
+    for (const b of Object.values(doc.bodies ?? {}))
+      for (const m of b.members) {
+        owned.add(m);
+        const g = doc.geoms?.[m];
+        if (g) geomPoints(g).forEach((p) => owned.add(p));
+      }
+    const cons = Object.values(doc.constraints ?? {});
+    const nearBody = (p: string) => owned.has(p) || cons.some((c) => c.type === "coincident" && c.refs.includes(p) && c.refs.some((r) => owned.has(r)));
+    for (const c of cons) if (c.type === "fix" && nearBody(c.refs[0])) c.type = "groundPoint";
+  },
 };
 
 export function parseDoc(text: string): SketchDoc {

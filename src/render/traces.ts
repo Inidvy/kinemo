@@ -54,7 +54,10 @@ function updateTrails(ed: Editor, now: number): number {
     const p = applyPose(poseOf(doc, owner.get(id)), pt);
     const list = trails.get(id) ?? [];
     const last = list[list.length - 1];
-    if (!last || Math.hypot(last.p.x - p.x, last.p.y - p.y) > 1e-9) list.push({ t: now, p });
+    const moved = last ? Math.hypot(last.p.x - p.x, last.p.y - p.y) : 0;
+    // A jump (undo, reset, going back to the start of the clip) starts a new trail instead of drawing a line across.
+    if (last && moved > ed.mech.size * 0.5) list.length = 0;
+    if (!last || moved > 1e-9) list.push({ t: now, p });
     while (list.length > 1 && now - list[0].t > keep) list.shift();
     trails.set(id, list);
   }
@@ -101,7 +104,7 @@ export function drawTraces(ctx: CanvasRenderingContext2D, ed: Editor): void {
   }
   const v = ed.view;
   const now = performance.now();
-  const keep = updateTrails(ed, now);
+  const keep = ed.exporting ? 0 : updateTrails(ed, now);
   if (keep) drawTrails(ctx, ed, now, keep);
   const paths = doc.motion.hideCycle ? null : pathsFor(ed);
   ctx.save();

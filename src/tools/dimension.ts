@@ -67,6 +67,12 @@ export const dimensionTool: Tool = {
   },
   down(ed, e) {
     const h = e.hit;
+    // Clicking a dimension that is already there changes its value.
+    if (h?.kind === "dimension") {
+      ed.select([]);
+      if (!ed.doc.constraints[h.id]?.data?.watch) ed.onEditDimension?.(h.id);
+      return;
+    }
     if (h && (h.kind === "point" || h.kind === "geom")) {
       if (ed.selection.size >= 2) ed.select([]);
       ed.select([h.id], true);

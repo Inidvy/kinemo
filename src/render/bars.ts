@@ -410,6 +410,29 @@ export function drawBodies(ctx: CanvasRenderingContext2D, ed: Editor, style: Bar
 }
 
 /** Pins as yellow discs the width of a slot; fixed and ground pivots are grey. Driven joints get an arrow. */
+/** Each joint's letter beside it, so sliders and timeline rows can be matched to joints. */
+export function drawJointLetters(ctx: CanvasRenderingContext2D, ed: Editor): void {
+  const m = ed.mech;
+  const k = m.context(m.current());
+  const v = ed.view;
+  const r = slotWidth(ed.doc, v) / 2;
+  ctx.save();
+  ctx.font = "600 11px system-ui, sans-serif";
+  ctx.textBaseline = "middle";
+  ctx.lineJoin = "round";
+  for (const j of m.joints) {
+    const at = v.toScreen(jointKinds.get(j.kind).anchor(k, j));
+    const text = m.letter(j.id);
+    const x = at.x + r + 4, y = at.y - r - 4;
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.strokeText(text, x, y);
+    ctx.fillStyle = ed.selection.has(j.id) ? colors.selected : "#4a5160";
+    ctx.fillText(text, x, y);
+  }
+  ctx.restore();
+}
+
 export function drawJoints(ctx: CanvasRenderingContext2D, ed: Editor): void {
   const doc = ed.doc;
   const v = ed.view;

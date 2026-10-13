@@ -339,7 +339,7 @@ describe("bodies", () => {
     const { groundBodies } = await import("../src/motion/bodies");
     const doc = emptyDoc();
     const a = bar(doc, 0, 0, 10, 0);
-    const fix = addConstraint(doc, { type: "fix", refs: [a.p1], data: { x: 0, y: 0 } });
+    const fix = addConstraint(doc, { type: "groundPoint", refs: [a.p1], data: { x: 0, y: 0 } });
     body(doc, "a", [a.id]);
     expect(groundBodies(doc).has("a")).toBe(false);
     const m = new Mechanism(doc);
@@ -352,7 +352,7 @@ describe("bodies", () => {
     expect(tip.y).toBeCloseTo(10, 5);
     // Documents are immutable snapshots in the app, so change a copy.
     const doc2 = structuredClone(doc);
-    addConstraint(doc2, { type: "fix", refs: [a.p2], data: { x: 10, y: 0 } });
+    addConstraint(doc2, { type: "groundPoint", refs: [a.p2], data: { x: 10, y: 0 } });
     expect(groundBodies(doc2).has("a")).toBe(true);
     expect(new Mechanism(doc2).moving).toEqual([]);
   });
@@ -369,5 +369,33 @@ describe("bodies", () => {
     const doc2 = emptyDoc();
     body(doc2, "row", [bar(doc2, 0, 0, 10, 0), bar(doc2, 10, 0, 20, 0), bar(doc2, 20, 0, 30, 0)].map((l) => l.id));
     expect(bodyLoops(doc2, doc2.bodies.row).length).toBe(0);
+  });
+});
+
+describe("fix and ground", () => {
+  it("ignores a plain Fix in Motion mode", () => {
+    const doc = emptyDoc();
+    const g = bar(doc, -10, 0, 0, 0);
+    const a = bar(doc, 0, 0, 10, 0);
+    addConstraint(doc, { type: "coincident", refs: [g.p2, a.p1] });
+    addConstraint(doc, { type: "fix", refs: [a.p2], data: { x: 10, y: 0 } });
+    body(doc, "g", [g.id], true);
+    body(doc, "a", [a.id]);
+    const m = new Mechanism(doc);
+    expect(m.joints.map((j) => j.kind)).toEqual(["pin"]);
+    expect(m.dof()).toBe(1);
+  });
+
+  it("upgrades an old Fix that made a fixed pivot into a ground point", async () => {
+    const { parseDoc } = await import("../src/io/file");
+    const doc = emptyDoc();
+    const a = bar(doc, 0, 0, 10, 0);
+    const loose = addPoint(doc, 50, 50);
+    addConstraint(doc, { type: "fix", refs: [a.p1], data: { x: 0, y: 0 } });
+    addConstraint(doc, { type: "fix", refs: [loose], data: { x: 50, y: 50 } });
+    body(doc, "a", [a.id]);
+    const old = { ...doc, version: 2 };
+    const up = parseDoc(JSON.stringify({ kinemo: true, doc: old }));
+    expect(Object.values(up.constraints).map((c) => c.type)).toEqual(["groundPoint", "fix"]);
   });
 });

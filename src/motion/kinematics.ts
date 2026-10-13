@@ -38,6 +38,7 @@ export class Mechanism {
   /** Moving (non-ground) bodies, in variable order. */
   readonly moving: Id[];
   private index = new Map<Id, number>();
+  private letters: Map<Id, string> | null = null;
   /** Typical size of the mechanism, so rotations and shifts weigh alike. */
   readonly size: number;
 
@@ -92,6 +93,22 @@ export class Mechanism {
     const out: Record<Id, Pose> = {};
     for (const id of Object.keys(this.doc.bodies)) out[id] = this.pose(q, id);
     return out;
+  }
+
+  /** A short name for a joint: A, B, … Z, AA, AB, … in the order the joints were made. */
+  letter(jointId: Id): string {
+    if (!this.letters) {
+      this.letters = new Map();
+      this.joints.forEach((j, i) => {
+        let n = i, s = "";
+        do {
+          s = String.fromCharCode(65 + (n % 26)) + s;
+          n = Math.floor(n / 26) - 1;
+        } while (n >= 0);
+        this.letters!.set(j.id, s);
+      });
+    }
+    return this.letters.get(jointId) ?? "?";
   }
 
   context(q: number[]): JointContext {

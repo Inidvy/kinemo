@@ -13,13 +13,20 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
 const bodyName = (ed: Editor, id: Id) => (id === "" ? t("body.world") : (ed.doc.bodies[id]?.name ?? "?"));
 
-export function jointName(ed: Editor, j: Joint): string {
-  return `${t(jointKinds.get(j.kind).label)} · ${bodyName(ed, j.a)} – ${bodyName(ed, j.b)}`;
+/** A joint's letter and kind, like "B · Pin". */
+export function jointShort(ed: Editor, j: Joint): string {
+  return `${ed.mech.letter(j.id)} · ${t(jointKinds.get(j.kind).label)}`;
 }
 
+/** A joint's letter and kind with the bodies it joins, like "B · Pin · Crank – Coupler". */
+export function jointName(ed: Editor, j: Joint): string {
+  return `${jointShort(ed, j)} · ${bodyName(ed, j.a)} – ${bodyName(ed, j.b)}`;
+}
+
+/** A slider is named after its joint: "B · Pin". */
 export function driverName(ed: Editor, d: Driver): string {
   const j = ed.mech.joint(d.joint);
-  return `${bodyName(ed, d.b)} / ${bodyName(ed, d.a)}${j ? ` · ${t(jointKinds.get(j.kind).label)}` : ""}`;
+  return j ? jointShort(ed, j) : `${bodyName(ed, d.b)} / ${bodyName(ed, d.a)}`;
 }
 
 function swatch(ed: Editor, b: Body): string {

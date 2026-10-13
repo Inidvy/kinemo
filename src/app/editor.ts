@@ -41,6 +41,8 @@ export class Editor {
   mode: Mode = "sketch";
   /** In Motion mode: the Animation tab (timeline, chart, export) is open. */
   animation = false;
+  /** Frames are being rendered for an export: leave out things that only make sense live. */
+  exporting = false;
   /** Redraw the canvas only (set by the canvas), for things that change on their own like a fading trail. */
   redraw: () => void = () => this.emit();
   message = "";

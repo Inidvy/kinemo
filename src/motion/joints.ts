@@ -134,8 +134,9 @@ jointKinds.register({
 });
 
 /**
- * Fixed pivot: a body fixed at one point only turns about it. Made by a Fix
- * on the body's point, or by a body point coincident with a fixed loose point.
+ * Fixed pivot: a body grounded at one point only turns about it. Made by a
+ * ground point (Shift+G) on the body's point, or by a body point coincident
+ * with a grounded loose point. A plain Fix only holds the sketch.
  * Its first body is the world ("").
  */
 jointKinds.register({
@@ -144,9 +145,9 @@ jointKinds.register({
   unit: "deg",
   fromConstraint(doc, c, owner) {
     let p: Id | undefined;
-    if (c.type === "fix") p = c.refs[0];
+    if (c.type === "groundPoint") p = c.refs[0];
     else if (c.type === "coincident" && c.refs.length === 2) {
-      const fixed = (id: Id) => !owner.has(id) && Object.values(doc.constraints).some((f) => f.type === "fix" && f.refs[0] === id);
+      const fixed = (id: Id) => !owner.has(id) && Object.values(doc.constraints).some((f) => f.type === "groundPoint" && f.refs[0] === id);
       if (fixed(c.refs[0])) p = c.refs[1];
       else if (fixed(c.refs[1])) p = c.refs[0];
     }

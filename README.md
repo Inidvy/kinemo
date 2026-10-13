@@ -25,10 +25,10 @@ Pushing to `main` deploys to GitHub Pages (Settings → Pages → Source: GitHub
 | C | Circle |
 | O | Point |
 | R / Shift+R | Rectangle by two corners / by centre and corner |
-| D | Dimension: click geometry (or select it first), a preview follows the cursor, click where the label goes, type a value |
-| E | Coincident (two points), or point on curve (points and one line, circle or arc) |
+| D | Dimension: click geometry (or select it first), a preview follows the cursor, click where the label goes, type a value. Click an existing dimension to change its value |
+| B | Coincident (two points), or point on curve (points and one line, circle or arc) |
 | H V P T | Horizontal, vertical, parallel, tangent |
-| N Q U Z Y W | Perpendicular, equal, midpoint, concentric, symmetric, fix |
+| N E U Z Y W | Perpendicular, equal, midpoint, concentric, symmetric, fix (sketch only: holds points or lines in place, ignored in Motion mode) |
 | X | Toggle construction |
 | K | Tag as track |
 | I | Show or hide constraint icons |
@@ -38,10 +38,10 @@ Pushing to `main` deploys to GitHub Pages (Settings → Pages → Source: GitHub
 | Ctrl+S / Ctrl+O | Save / open a `.kinemo.json` file |
 | Shift+N | New sketch |
 | G | Group the selected lines, arcs, circles and points into a body. With one part of an existing body (or the body) selected too, add the rest to that body. Each item is in one body only |
-| Shift+G | Toggle ground on the selected body |
+| Shift+G | Toggle ground on the selected body, or make the selected points ground pivots (the body turns about them in Motion mode) |
 | Shift+I | Solid or see-through bars |
 | Tab | Switch between Sketch and Motion |
-| Esc | Cancel, then back to Select |
+| Esc | Cancel and go back to Select |
 
 Constraint keys work both ways: select items first and press the key, or press the key first and then click the items (it stays active for the next ones until Esc). The right panel lists the constraints that fit the current selection, and every toolbar button shows its key. Middle- or right-drag pans, the wheel zooms, and two fingers pan and pinch on touch screens.
 
@@ -51,7 +51,7 @@ Over-constraining is allowed. The newest constraint that causes it is shown in d
 
 ## Bodies and Motion mode
 
-Select geometry and press G to group it into one rigid body. A body fixed at one point (W) turns about it like a ground pivot; a body fixed at two or more points, or marked with Shift+G, is ground and drawn grey. Closed loops of lines in a body are drawn as see-through plates, lines a slider runs along get a slot with a dotted centre line, and each body's colour can be picked from eight in its properties. Joints come from the sketch: wherever geometry of two bodies is coincident (or concentric) they are pinned, and a point of one body on a line or arc of another slides along it. Lines that carry a slider are drawn as slots.
+Select geometry and press G to group it into one rigid body. Select a point and press Shift+G to make it a ground pivot (shown with the ground icon): its body turns about it in Motion mode. A body with two or more ground pivots, or a body selected and marked with Shift+G, is ground and drawn grey. Fix (W) only holds the sketch and is ignored in Motion mode. Files from before this change turn a Fix that made a pivot into a ground pivot. Closed loops of lines in a body are drawn as see-through plates, lines a slider runs along get a slot with a dotted centre line, and each body's colour can be picked from eight in its properties. Joints come from the sketch: wherever geometry of two bodies is coincident (or concentric) they are pinned, and a point of one body on a line or arc of another slides along it. Lines that carry a slider are drawn as slots. Each joint gets a short letter (A, B, …) shown beside it, and sliders and timeline rows are named by it, like "B · Pin".
 
 | Key (Motion) | Action |
 | --- | --- |
@@ -59,7 +59,6 @@ Select geometry and press G to group it into one rigid body. A body fixed at one
 | D | Add slider: click the body it measures from, the body that moves, then the joint (or click a joint) |
 | Shift+F | Flip to the other way the mechanism assembles |
 | R | Reset every body to its sketched position |
-| Shift+G | Toggle ground |
 | ← → ↑ ↓ | Hold to move the first and second slider (each slider's keys can be changed in its panel, also to a combination like 1 + ←) |
 | Del | Delete the selected joint's slider |
 | T | Trace path: click a point of a bar to draw the path it follows |
@@ -81,7 +80,7 @@ Traced points also leave a live trail as they move, by dragging, sliders or play
 
 Copy and paste: in Sketch mode Ctrl+C copies the selection (lines, arcs, circles, points, or whole bodies) with the constraints between them, Ctrl+V pastes it at the pointer, Ctrl+X cuts and Ctrl+D duplicates. Copies can be pasted into another tab of the app.
 
-Timeline: the Animation tab (next to Sketch and Motion) opens the timeline above the tabs, with a row per slider. Move sliders and press K to set keys (◆) at the playhead for the sliders you moved (and those that already have keys). Space plays. Segments ease in and out; right-click a key or segment for a steady speed. Drag keys to retime them, double-click to delete, or select one to type its time and value (a crank can be keyed past 360° for full turns). The clip has a length, and plays once, loops or ping-pongs. Sliders without keys stay free while it plays. Below the keys, "Over time" charts every slider and watched dimension across the clip (angles count on past 360° for a turning crank), with the value at the playhead. Export video records one whole cycle of the canvas (MP4 where the browser supports it, otherwise WebM), and Export CSV saves the charted values.
+Timeline: the Animation tab (next to Sketch and Motion) opens the timeline above the tabs, with a row per slider. Move sliders and press K to set keys (◆) at the playhead for the sliders you moved (and those that already have keys). Space plays. Or press Record, move the mechanism by hand (drag it or use sliders) and press Stop: the movement is smoothed into a few keys on smooth curves, which you can then retime and edit like any other. Each stretch between keys is eased, steady, or a smooth curve; right-click a key or stretch to switch, or pick it when a key is selected. Drag keys to retime them, double-click to delete, or select one to type its time and value (a crank can be keyed past 360° for full turns). The Clip menu sets the length and whether it plays once, loops or ping-pongs. Sliders without keys stay free while it plays. Below the keys, "Over time" charts every slider and watched dimension across the clip (angles count on past 360° for a turning crank), with the value at the playhead. Export makes a looping GIF of one whole cycle framed around the mechanism, a video of it (MP4 where the browser supports it, otherwise WebM), or a CSV of the charted values.
 
 Sliders ease smoothly to a new value. A slider for a joint that goes round (a crank, a full circle, a closed track) doesn't stop at its ends: dragging past the end of the bar carries on round by as far as you drag; hold ◀ ▶ or a slider's keys to keep it moving. When a slider or a drag asks for more than the mechanism can do, it stops at the last pose that works. The feature list shows the mechanism's degrees of freedom.
 

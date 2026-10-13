@@ -81,3 +81,20 @@ describe("path tracing", () => {
     expect(m.measure(r.q, joint)).toBeCloseTo(120, 3);
   });
 });
+
+describe("recording", () => {
+  it("turns a shaky recorded movement into a few smooth keys that follow it", async () => {
+    const { keysFromRecording } = await import("../src/motion/timeline");
+    const ts: number[] = [], vs: number[] = [];
+    for (let i = 0; i <= 180; i++) {
+      const t = 10 + i / 60;
+      ts.push(t);
+      vs.push(90 * Math.sin((Math.PI * (t - 10)) / 3) + (i % 2 ? 0.4 : -0.4));
+    }
+    const keys = keysFromRecording(ts, vs);
+    expect(keys[0].t).toBe(0);
+    expect(keys[keys.length - 1].t).toBeCloseTo(3, 2);
+    expect(keys.length).toBeLessThan(20);
+    for (let i = 0; i <= 180; i += 7) expect(Math.abs(valueAt(keys, i / 60)! - 90 * Math.sin((Math.PI * i) / 180))).toBeLessThan(3);
+  });
+});

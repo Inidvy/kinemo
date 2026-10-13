@@ -19,6 +19,15 @@ export function valueAt(keys: Keyframe[] | undefined, t: number): number | null 
     const a = keys[i], b = keys[i + 1];
     if (t > b.t) continue;
     const u = b.t > a.t ? (t - a.t) / (b.t - a.t) : 1;
+    if (a.smooth) {
+      // A curve through the neighbouring keys too, so recorded motion flows through each key without stopping.
+      const prev = keys[i - 1] ?? a, next = keys[i + 2] ?? b;
+      const h = b.t - a.t;
+      const slope = (p: Keyframe, q: Keyframe) => (q.t > p.t ? (q.v - p.v) / (q.t - p.t) : 0);
+      const ma = slope(prev, b) * h, mb = slope(a, next) * h;
+      const u2 = u * u, u3 = u2 * u;
+      return (2 * u3 - 3 * u2 + 1) * a.v + (u3 - 2 * u2 + u) * ma + (-2 * u3 + 3 * u2) * b.v + (u3 - u2) * mb;
+    }
     return a.v + (b.v - a.v) * (a.linear ? u : ease(u));
   }
   return last.v;
@@ -53,4 +62,50 @@ export function setKey(tl: Timeline, driver: Id, t: number, v: number): void {
   if (near) near.v = v;
   else keys.push({ t, v });
   keys.sort((a, b) => a.t - b.t);
+}
+
+/** Average over a window of samples either side, to take the shake out of a hand-made movement. */
+function smoothSamples(ts: number[], vs: number[], window: number): number[] {
+  const end = ts[ts.length - 1];
+  return vs.map((_, i) => {
+    // The same width either side, so the start and end don't get pulled inwards.
+    const w = Math.min(window, ts[i] - ts[0], end - ts[i]);
+    let sum = 0, n = 0;
+    for (let j = i; j >= 0 && ts[i] - ts[j] <= w; j--) (sum += vs[j]), n++;
+    for (let j = i + 1; j < vs.length && ts[j] - ts[i] <= w; j++) (sum += vs[j]), n++;
+    return sum / n;
+  });
+}
+
+/** The fewest samples that keep the curve within `tol` of every sample (Ramer–Douglas–Peucker). */
+function simplify(ts: number[], vs: number[], tol: number): number[] {
+  const keep = new Set([0, ts.length - 1]);
+  const walk = (a: number, b: number) => {
+    let worst = -1, far = tol;
+    for (let i = a + 1; i < b; i++) {
+      const u = (ts[i] - ts[a]) / (ts[b] - ts[a] || 1);
+      const d = Math.abs(vs[i] - (vs[a] + (vs[b] - vs[a]) * u));
+      if (d > far) [worst, far] = [i, d];
+    }
+    if (worst < 0) return;
+    keep.add(worst);
+    walk(a, worst);
+    walk(worst, b);
+  };
+  if (ts.length > 2) walk(0, ts.length - 1);
+  return [...keep].sort((x, y) => x - y);
+}
+
+/**
+ * Keys from a recorded movement: smoothed, then cut down to the keys a
+ * smooth curve needs to follow it closely. Times start at 0.
+ */
+export function keysFromRecording(ts: number[], vs: number[]): Keyframe[] {
+  if (!ts.length) return [];
+  const t0 = ts[0];
+  const times = ts.map((t) => t - t0);
+  const smooth = smoothSamples(times, vs, 0.08);
+  const span = Math.max(...smooth) - Math.min(...smooth);
+  const idx = simplify(times, smooth, Math.max(span * 0.01, 1e-6));
+  return idx.map((i) => ({ t: Math.round(times[i] * 1000) / 1000, v: smooth[i], smooth: true }));
 }

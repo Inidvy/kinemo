@@ -1,22 +1,27 @@
 import type { Editor } from "../app/editor";
-import type { Id, Timeline } from "../core/model";
+import type { Id, Keyframe, Timeline } from "../core/model";
 import { jointKinds } from "../motion/joints";
-import { clipTime, DEFAULT_TIMELINE, setKey, timelineOf, valueAt, valuesAt } from "../motion/timeline";
+import { clipTime, DEFAULT_TIMELINE, keysFromRecording, setKey, timelineOf, valueAt, valuesAt } from "../motion/timeline";
 import { t } from "../i18n";
 import { icons } from "./icons";
 import { driverName } from "./motionPanels";
 import { chartSeries, drawSeries, fmtValue, valueOn, type Series } from "./chart";
+import { download, exportGif, recordVideo } from "./exportMedia";
+
+/** How the stretch after a key moves: eased in and out, at a steady speed, or on a smooth curve through the keys. */
+const SEGS = ["eased", "steady", "smooth"] as const;
+type Seg = (typeof SEGS)[number];
+const segKind = (k: Keyframe): Seg => (k.smooth ? "smooth" : k.linear ? "steady" : "eased");
+function setSeg(k: Keyframe, how: Seg) {
+  delete k.linear;
+  delete k.smooth;
+  if (how === "steady") k.linear = true;
+  if (how === "smooth") k.smooth = true;
+}
 
 /** Line colours for the chart, one per series. */
 const PALETTE = ["#2069e0", "#d81b60", "#0b8a7a", "#f28c18", "#8e44ad", "#5f6b7a"];
 
-function download(blob: Blob, name: string) {
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-}
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -109,7 +114,7 @@ export class Player {
   }
 
   /** Put the keyed sliders where the timeline has them at a time. */
-  private pose(time: number) {
+  pose(time: number): void {
     const ed = this.ed;
     const doc = ed.doc;
     const targets = valuesAt(timelineOf(doc), time).flatMap(({ driver, value }) => (doc.motion.drivers[driver] ? [{ joint: doc.motion.drivers[driver].joint, value }] : []));
@@ -142,6 +147,81 @@ export class Player {
 
   snapshot(): void {
     this.base = this.values();
+  }
+
+  /** A free-hand movement being recorded: when it started and every slider's value each frame. */
+  private take: { frame: number; t: number[]; v: Record<Id, number[]>; last: Record<Id, number> } | null = null;
+
+  get recording(): boolean {
+    return this.take !== null;
+  }
+
+  /** Start recording what the sliders do while you drag the mechanism or move sliders. */
+  startRecording(): void {
+    const ed = this.ed;
+    if (!Object.keys(ed.doc.motion.drivers).length) return ed.flash(t("timeline.noSliders"));
+    if (this.playing) this.stop();
+    this.take = { frame: 0, t: [], v: {}, last: {} };
+    const sample = (now: number) => {
+      const take = this.take;
+      if (!take) return;
+      const m = ed.mech;
+      const q = m.current();
+      take.t.push(now / 1000);
+      for (const d of Object.values(ed.doc.motion.drivers)) {
+        const j = m.joint(d.joint);
+        if (!j) continue;
+        const kind = jointKinds.get(j.kind);
+        let v = m.measure(q, d.joint);
+        const list = (take.v[d.id] ??= []);
+        // Count on past a full turn, so a crank turned round and round records as turning.
+        if (kind.wraps?.(j) && list.length) {
+          const [lo, hi] = kind.range(ed.doc, j);
+          const per = hi - lo, prev = list[list.length - 1];
+          v = prev + ((((v - prev + per / 2) % per) + per) % per) - per / 2;
+        }
+        list.push(v);
+      }
+      this.time = take.t[take.t.length - 1] - take.t[0];
+      ed.emit();
+      take.frame = requestAnimationFrame(sample);
+    };
+    this.take.frame = requestAnimationFrame(sample);
+    ed.emit();
+  }
+
+  /** Stop recording and turn the movement into smooth keys for the sliders that moved. */
+  stopRecording(): void {
+    const take = this.take;
+    if (!take) return;
+    cancelAnimationFrame(take.frame);
+    this.take = null;
+    const ed = this.ed;
+    const duration = take.t.length ? take.t[take.t.length - 1] - take.t[0] : 0;
+    if (duration < 0.2) {
+      ed.flash(t("record.tooShort"));
+      return ed.emit();
+    }
+    const moved = Object.entries(take.v).filter(([id, vs]) => {
+      const d = ed.doc.motion.drivers[id];
+      const j = d && ed.mech.joint(d.joint);
+      const tiny = j && jointKinds.get(j.kind).unit === "deg" ? 0.2 : ed.mech.size * 1e-3;
+      return vs.length === take.t.length && Math.max(...vs) - Math.min(...vs) > tiny;
+    });
+    if (!moved.length) {
+      ed.flash(t("record.nothingMoved"));
+      return ed.emit();
+    }
+    ed.change((doc) => {
+      const tl: Timeline = structuredClone(doc.motion.timeline ?? DEFAULT_TIMELINE);
+      tl.length = Math.max(0.1, Math.ceil(duration * 10) / 10);
+      for (const [id, vs] of moved) tl.keys[id] = keysFromRecording(take.t, vs);
+      doc.motion.timeline = tl;
+    });
+    this.time = 0;
+    this.pose(0);
+    this.snapshot();
+    ed.flash(t("record.done", { n: moved.length }));
   }
 
   /**
@@ -187,7 +267,7 @@ export class Player {
   }
 }
 
-const round = (x: number) => Math.round(x * 1000) / 1000;
+export const round = (x: number) => Math.round(x * 1000) / 1000;
 
 let player: Player | null = null;
 
@@ -205,8 +285,12 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
   /** The selected key: slider and index into its keys. */
   let sel: { driver: Id; i: number } | null = null;
   let lastOpen = false;
-  /** A video being recorded. */
-  let recording: MediaRecorder | null = null;
+  /** A video being recorded, and how far a GIF has got (null when none is being made). */
+  let video: MediaRecorder | null = null;
+  let gifProgress: number | null = null;
+  /** The clip settings pop-up is open. */
+  let menuOpen = false;
+  let lastFlags = "";
 
   const lanes = () => el.querySelector<HTMLElement>(".tl-lanes");
   const timeAt = (clientX: number) => {
@@ -232,6 +316,15 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
     const doc = ed.doc;
     const tl = timelineOf(doc);
     if (sel && !tl.keys[sel.driver]?.[sel.i]) sel = null;
+    // While playing or recording only the playhead moves: rebuilding every
+    // frame would pull the Pause or Stop button out from under the pointer.
+    const flags = `${p.playing}|${p.recording}|${!!video}|${gifProgress === null ? "" : Math.round(gifProgress * 100)}`;
+    const running = p.playing || p.recording;
+    if (running && flags === lastFlags) {
+      patch();
+      return;
+    }
+    lastFlags = flags;
     const active = document.activeElement;
     if (active && el.contains(active) && active.matches("input, select")) {
       // Don't disturb typing: only move the playhead.
@@ -252,8 +345,8 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
         const diamonds = keys
           .map((k, i) => {
             const on = sel?.driver === d.id && sel.i === i;
-            const lin = k.linear && i < keys.length - 1;
-            const seg = i < keys.length - 1 ? `<span class="tl-seg${lin ? " linear" : ""}" data-seg="${i}" data-driver="${d.id}" style="left:${pct(k.t)};width:calc(${pct(keys[i + 1].t)} - ${pct(k.t)})" title="${t(lin ? "timeline.linear" : "timeline.eased")}"></span>` : "";
+            const how = segKind(k);
+            const seg = i < keys.length - 1 ? `<span class="tl-seg ${how}" data-seg="${i}" data-driver="${d.id}" style="left:${pct(k.t)};width:calc(${pct(keys[i + 1].t)} - ${pct(k.t)})" title="${t(`timeline.seg.${how}`)}"></span>` : "";
             return `${seg}<span class="tl-key${on ? " on" : ""}" data-key="${i}" data-driver="${d.id}" style="left:${pct(k.t)}" title="${k.t.toFixed(2)} s · ${fmt(ed, d.id, k.v)}"></span>`;
           })
           .join("");
@@ -274,27 +367,44 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
     const k = sel && tl.keys[sel.driver][sel.i];
     const editor = k
       ? `<span class="tl-keyedit">
-          <label>${t("timeline.at")}<input type="number" step="0.05" min="0" data-tl="kt" value="${k.t}"></label>
+          <span class="tl-keyname">◆ ${esc(driverName(ed, doc.motion.drivers[sel!.driver]))}</span>
+          <label>${t("timeline.at")}<input type="number" step="0.05" min="0" data-tl="kt" value="${k.t}"> s</label>
           <label>${t("timeline.value")}<input type="number" step="any" data-tl="kv" value="${round(k.v)}"></label>
-          <label class="check"><input type="checkbox" data-tl="klin" ${k.linear ? "checked" : ""}> ${t("timeline.linearShort")}</label>
+          <select data-tl="kseg" title="${t("timeline.segTip")}">${SEGS.map((x) => `<option value="${x}"${segKind(k) === x ? " selected" : ""}>${t(`timeline.segShort.${x}`)}</option>`).join("")}</select>
           <button class="icon-btn" data-tl="kdel" title="${t("panel.delete")}">${icons.delete}</button>
         </span>`
-      : `<span class="muted tl-hint">${t(drivers.length ? "timeline.hint" : "timeline.noSliders")}</span>`;
+      : "";
+    const anyKeys = Object.values(tl.keys).some((x) => x.length);
+    const busy = p.recording || !!video || gifProgress !== null;
     el.innerHTML = `
       <div class="tl-head">
-        <button class="icon-btn tl-play" data-tl="play" title="${t(p.playing ? "timeline.pause" : "timeline.play")} (Space)">${p.playing ? icons.pause : icons.play}</button>
-        <span class="tl-time">${p.time.toFixed(2)} s</span>
-        <label>${t("timeline.length")}<input type="number" min="0.1" step="0.5" data-tl="length" value="${tl.length}"> s</label>
-        <select data-tl="mode">
-          ${(["once", "loop", "pingpong"] as const).map((m) => `<option value="${m}"${tl.mode === m ? " selected" : ""}>${t(`timeline.${m}`)}</option>`).join("")}
-        </select>
-        <button class="btn tl-keybtn" data-tl="key" title="${t("timeline.keyTip")}">${icons.key}${t("timeline.key")}<kbd>K</kbd></button>
+        <span class="tl-group">
+          <button class="icon-btn tl-play" data-tl="play" ${busy ? "disabled" : ""} title="${t(p.playing ? "timeline.pause" : "timeline.play")} (Space)">${p.playing ? icons.pause : icons.play}</button>
+          <span class="tl-time">${p.time.toFixed(2)}<span class="muted"> / ${tl.length} s</span></span>
+        </span>
+        <span class="tl-group">
+          <button class="btn tl-keybtn" data-tl="key" ${busy ? "disabled" : ""} title="${t("timeline.keyTip")}">${icons.key}${t("timeline.key")}</button>
+          <button class="btn tl-rec${p.recording ? " on" : ""}" data-tl="rec" ${video || gifProgress !== null ? "disabled" : ""} title="${t("record.tip")}"><span class="tl-recdot"></span>${t(p.recording ? "record.stop" : "record.start")}</button>
+        </span>
         ${editor}
-        <span class="tl-export">
-          <button class="btn" data-tl="video" title="${t("export.videoTip")}">${recording ? t("export.recording") : t("export.video")}</button>
-          <button class="btn" data-tl="csv" title="${t("export.csvTip")}">${t("export.csv")}</button>
+        <span class="tl-spacer"></span>
+        <details class="tl-menu"${menuOpen ? " open" : ""}>
+          <summary class="btn">${icons.clock}${t("timeline.clip")}</summary>
+          <div class="tl-pop">
+            <label>${t("timeline.length")}<input type="number" min="0.1" step="0.5" data-tl="length" value="${tl.length}"> s</label>
+            <label>${t("timeline.playMode")}<select data-tl="mode">
+              ${(["once", "loop", "pingpong"] as const).map((m) => `<option value="${m}"${tl.mode === m ? " selected" : ""}>${t(`timeline.${m}`)}</option>`).join("")}
+            </select></label>
+          </div>
+        </details>
+        <span class="tl-group tl-export">
+          <span class="muted">${t("export.title")}</span>
+          <button class="btn" data-tl="gif" ${anyKeys && !busy ? "" : "disabled"} title="${t("export.gifTip")}">${gifProgress !== null ? `${Math.round(gifProgress * 100)}%` : "GIF"}</button>
+          <button class="btn" data-tl="video" ${anyKeys && (!busy || video) ? "" : "disabled"} title="${t("export.videoTip")}">${video ? t("export.recording") : t("export.video")}</button>
+          <button class="btn" data-tl="csv" ${anyKeys && !busy ? "" : "disabled"} title="${t("export.csvTip")}">CSV</button>
         </span>
       </div>
+      ${anyKeys || p.recording ? "" : `<div class="tl-empty muted">${t(drivers.length ? "timeline.hint" : "timeline.noSliders")}</div>`}
       <div class="tl-body">
         <div class="tl-name tl-corner"></div>
         <div class="tl-lanes tl-ruler">${ticks.join("")}</div>
@@ -316,39 +426,10 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
     const head = el.querySelector<HTMLElement>(".tl-playhead");
     if (head) head.style.left = `${(Math.min(tl.length, p.time) / tl.length) * 100}%`;
     const time = el.querySelector<HTMLElement>(".tl-time");
-    if (time) time.textContent = `${p.time.toFixed(2)} s`;
+    if (time) time.firstChild!.textContent = p.time.toFixed(2);
     for (const b of el.querySelectorAll<HTMLElement>("[data-series]")) {
       const s = shown[Number(b.dataset.series)];
       if (s) b.textContent = fmtValue(s, valueOn(s, p.time));
-    }
-  };
-
-  /** Record one whole cycle of the canvas as a video and download it. */
-  const recordVideo = () => {
-    if (recording) {
-      p.stop();
-      return;
-    }
-    const canvas = document.querySelector<HTMLCanvasElement>("#canvas");
-    if (!canvas || typeof MediaRecorder === "undefined" || !canvas.captureStream) return ed.flash(t("export.noVideo"));
-    const type = ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9", "video/webm"].find((x) => MediaRecorder.isTypeSupported(x));
-    if (!type) return ed.flash(t("export.noVideo"));
-    const rec = new MediaRecorder(canvas.captureStream(60), { mimeType: type, videoBitsPerSecond: 8_000_000 });
-    const chunks: Blob[] = [];
-    rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
-    rec.onstop = () => {
-      recording = null;
-      download(new Blob(chunks, { type }), `mechanism.${type.startsWith("video/mp4") ? "mp4" : "webm"}`);
-      ed.emit();
-    };
-    ed.select([]);
-    recording = rec;
-    rec.start();
-    // Hold the first pose a moment so the video doesn't start mid-movement.
-    p.time = 0;
-    if (!p.playCycle(() => setTimeout(() => rec.state !== "inactive" && rec.stop(), 300))) {
-      recording = null;
-      rec.stop();
     }
   };
 
@@ -377,7 +458,21 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
       b.blur();
       if (what === "play") p.toggle();
       if (what === "key") p.key();
-      if (what === "video") recordVideo();
+      if (what === "video") {
+        if (video) p.stop();
+        else video = recordVideo(ed, p, () => ((video = null), ed.emit()));
+      }
+      if (what === "gif") {
+        gifProgress = 0;
+        exportGif(ed, p, (f) => {
+          gifProgress = f >= 1 ? null : f;
+          ed.emit();
+        }).catch((err: Error) => ed.flash(err.message));
+      }
+      if (what === "rec") {
+        if (p.recording) p.stopRecording();
+        else p.startRecording();
+      }
       if (what === "csv") exportCsv();
       if (what === "kdel" && sel) {
         const s = sel;
@@ -394,6 +489,10 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
     if (name) ed.select([name.dataset.pick!]);
   });
 
+  el.addEventListener("toggle", (e) => {
+    if ((e.target as HTMLElement).matches(".tl-menu")) menuOpen = (e.target as HTMLDetailsElement).open;
+  }, true);
+
   el.addEventListener("change", (e) => {
     const input = e.target as HTMLInputElement;
     const what = input.dataset.tl;
@@ -403,7 +502,7 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
     if (!sel) return;
     const s = sel;
     if (what === "kv" && Number.isFinite(n)) editTimeline((tl) => (tl.keys[s.driver][s.i].v = n));
-    if (what === "klin") editTimeline((tl) => (tl.keys[s.driver][s.i].linear = input.checked || undefined));
+    if (what === "kseg") editTimeline((tl) => setSeg(tl.keys[s.driver][s.i], input.value as Seg));
     if (what === "kt" && Number.isFinite(n)) {
       editTimeline((tl) => {
         const keys = tl.keys[s.driver];
@@ -425,7 +524,7 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
     const i = Number(h.dataset.key ?? h.dataset.seg);
     editTimeline((tl) => {
       const k = tl.keys[driver]?.[i];
-      if (k) k.linear = k.linear ? undefined : true;
+      if (k) setSeg(k, SEGS[(SEGS.indexOf(segKind(k)) + 1) % SEGS.length]);
     });
   });
 

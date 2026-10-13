@@ -114,7 +114,7 @@ export const equal: ConstraintType = {
   id: "equal",
   label: "c.equal",
   glyph: "=",
-  shortcut: "q",
+  shortcut: "e",
   fromSelection(doc, sel) {
     const { geoms, lines, curves, points } = split(doc, sel);
     if (points.length || geoms.length < 2) return "hint.selectEqual";
@@ -194,7 +194,32 @@ export const symmetric: ConstraintType = {
   anchor: (doc, c) => geomAnchor(doc, c.refs[2]),
 };
 
-/** Lock points where they are now. */
+/**
+ * A ground pivot: the point is fixed in the sketch, and in Motion mode its
+ * body turns about it. Made with Shift+G on a point.
+ */
+export const groundPoint: ConstraintType = {
+  id: "groundPoint",
+  label: "c.groundPoint",
+  glyph: "⏚",
+  hidden: true,
+  fromSelection(doc, sel) {
+    const { points } = split(doc, sel);
+    if (!points.length) return "hint.ground";
+    return points.map((p) => ({ type: "groundPoint", refs: [p], data: { x: doc.points[p].x, y: doc.points[p].y } }));
+  },
+  toPrimitives(doc, c) {
+    const p = c.refs[0];
+    const at = c.data ?? doc.points[p];
+    return [
+      { id: `${c.id}#0`, type: "coordinate_x", p_id: p, x: at.x },
+      { id: `${c.id}#1`, type: "coordinate_y", p_id: p, y: at.y },
+    ];
+  },
+  anchor: (doc, c) => P(doc, c.refs[0]),
+};
+
+/** Lock points or lines where they are now, in the sketch only (Motion mode ignores it). */
 export const fix: ConstraintType = {
   id: "fix",
   label: "c.fix",

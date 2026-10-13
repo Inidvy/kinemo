@@ -237,6 +237,20 @@ const builtins: Action[] = [
     shift: true,
     group: "body",
     run(ed) {
+      // Selected points become ground pivots (or stop being one).
+      const pts = [...ed.selection].filter((id) => id in ed.doc.points);
+      if (pts.length) {
+        const ground = (doc: SketchDoc, p: Id) => Object.values(doc.constraints).find((c) => c.type === "groundPoint" && c.refs[0] === p);
+        const on = !pts.every((p) => ground(ed.doc, p));
+        ed.change((doc) => {
+          for (const p of pts) {
+            const c = ground(doc, p);
+            if (on && !c) addConstraint(doc, { type: "groundPoint", refs: [p], data: { x: doc.points[p].x, y: doc.points[p].y } });
+            if (!on && c) delete doc.constraints[c.id];
+          }
+        });
+        return;
+      }
       const ids = selectedBodies(ed);
       if (!ids.length) return ed.flash(t("hint.ground"));
       const on = !ids.every((id) => ed.doc.bodies[id].ground);
@@ -300,7 +314,7 @@ for (const c of constraintTypes.all()) {
  * the edges of circles, and loose points. Not arc centres, which can be far
  * away for a gentle curve. In Motion mode, where the bodies are now.
  */
-function outlinePoints(doc: SketchDoc, posed: boolean): Vec[] {
+export function outlinePoints(doc: SketchDoc, posed: boolean): Vec[] {
   const owner = ownerMap(doc);
   const at = (id: Id, p: Vec = doc.points[id]) => (posed && owner.has(id) ? applyPose(poseOf(doc, owner.get(id)!), p) : p);
   const out: Vec[] = [];

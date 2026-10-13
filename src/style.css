@@ -776,7 +776,7 @@ details summary {
   max-height: 42vh;
   overflow: auto;
   user-select: none;
-  --tl-name: 180px;
+  --tl-name: 130px;
   --tl-pad: 18px;
 }
 
@@ -934,9 +934,15 @@ details summary {
   background: #9aa3b0;
 }
 
-.tl-seg.linear {
+.tl-seg.steady {
   background: none;
   border-top: 2px dashed #9aa3b0;
+  height: 0;
+}
+
+.tl-seg.smooth {
+  background: none;
+  border-top: 2px dotted var(--accent);
   height: 0;
 }
 
@@ -975,10 +981,112 @@ details summary {
   z-index: 1;
 }
 
-.tl-export {
-  margin-left: auto;
+.tl-group {
   display: inline-flex;
+  align-items: center;
   gap: 6px;
+}
+
+.tl-spacer {
+  flex: 1;
+}
+
+.tl-head .btn {
+  padding: 3px 9px;
+  font-size: 12px;
+  margin: 0;
+}
+
+.tl-head .btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.tl-head .btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.tl-time .muted {
+  font-size: 11px;
+}
+
+.tl-rec .tl-recdot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--bad);
+  margin-right: 5px;
+}
+
+.tl-rec.on {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+.tl-rec.on .tl-recdot {
+  animation: tl-blink 1s steps(2) infinite;
+}
+
+@keyframes tl-blink {
+  50% {
+    opacity: 0.2;
+  }
+}
+
+.tl-menu {
+  position: relative;
+}
+
+.tl-menu summary {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.tl-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.tl-pop {
+  position: fixed;
+  z-index: 20;
+  margin-top: 4px;
+  transform: translateX(-30%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+.tl-pop label {
+  justify-content: space-between;
+}
+
+.tl-keyname {
+  font-weight: 600;
+  color: var(--sel);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tl-empty {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tl-export .muted {
+  font-size: 12px;
 }
 
 .tl-section {

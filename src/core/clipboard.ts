@@ -69,7 +69,7 @@ export function pasteClip(doc: SketchDoc, clip: Clip, offset: Vec, bodyName: (do
     const n = id(c.id, "c");
     const copy: Constraint = { ...structuredClone(c), id: n, refs: c.refs.map(ref) };
     // A fixed point stays fixed where it was pasted.
-    if (c.type === "fix" && copy.data) copy.data = { ...copy.data, x: copy.data.x + offset.x, y: copy.data.y + offset.y };
+    if ((c.type === "fix" || c.type === "groundPoint") && copy.data) copy.data = { ...copy.data, x: copy.data.x + offset.x, y: copy.data.y + offset.y };
     doc.constraints[n] = copy;
   }
   for (const b of clip.bodies) {

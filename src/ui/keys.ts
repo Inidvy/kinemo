@@ -12,12 +12,12 @@ export function mountKeys(ed: Editor): void {
     const ctrl = e.ctrlKey || e.metaKey;
 
     if (key === "escape") {
+      // Cancel what the tool is doing and go back to Select (Move in Motion mode).
       const tool = tools.find(ed.tool);
-      if (!tool?.cancel?.(ed)) {
-        const home = ed.mode === "motion" ? "move" : "select";
-        if (ed.tool !== home) setTool(ed, home);
-        else ed.select([]);
-      }
+      const cancelled = !!tool?.cancel?.(ed);
+      const home = ed.mode === "motion" ? "move" : "select";
+      if (ed.tool !== home) setTool(ed, home);
+      else if (!cancelled) ed.select([]);
       ed.emit();
       return;
     }

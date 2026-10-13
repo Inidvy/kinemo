@@ -102,6 +102,8 @@ export interface Keyframe {
   v: number;
   /** The segment from this key to the next runs at a steady speed instead of easing. */
   linear?: boolean;
+  /** The segment from this key to the next flows through it on a smooth curve (recorded motion). */
+  smooth?: boolean;
 }
 
 export interface Timeline {
@@ -136,7 +138,7 @@ export interface SketchDoc {
   motion: MotionState;
 }
 
-export const DOC_VERSION = 2;
+export const DOC_VERSION = 3;
 
 export function emptyDoc(): SketchDoc {
   return {
