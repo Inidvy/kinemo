@@ -70,7 +70,7 @@ Sliders sit in the right panel, and you can drag them and the bars together. Dra
 
 Gears: make two circles (or arcs) in different bodies tangent (T) and they mesh as gears: they roll on each other, turning the other way by the ratio of their sizes, or the same way when one sits inside the other (a ring gear). Pin each gear's centre to put it on an axle. A line tangent to a circle of another body is a rack and pinion. Gears and racks are drawn with teeth.
 
-Cams: untick "Meshes as gears" on a tangent between circles, or a line and a circle, and the follower slides on the cam instead of rolling with it. A circle tangent to an arc is always a cam. A roller (a circle) follows a cam's outline at its radius.
+Cams: untick "Teeth mesh" on a tangent between circles, or a line and a circle, and the follower slides on the cam instead of rolling with it. A circle tangent to an arc is always a cam. A roller (a circle) follows a cam's outline at its radius.
 
 Live dimensions: tick "Watch" on any dimension. It stops setting the sketch and only measures; in Motion mode it shows in teal on the canvas and under "Watched" in the left panel, updating as you drag, slide or play.
 
