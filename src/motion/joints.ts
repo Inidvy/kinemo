@@ -52,6 +52,8 @@ export interface JointKind {
   wraps?(j: Joint): boolean;
   /** Where the joint is drawn. */
   anchor(k: JointContext, j: Joint): Vec;
+  /** For a joint that runs along a path: the point of the path at a slider value. */
+  along?(k: JointContext, j: Joint, value: number): Vec;
 }
 
 export const jointKinds = new Registry<JointKind>("joints");
@@ -364,6 +366,23 @@ jointKinds.register({
     return [0, total];
   },
   anchor: (k, j) => k.w(j.refs[0]),
+  along(k, j, value) {
+    const list = pieces(k, j);
+    const total = list.reduce((s, x) => s + x.length, 0);
+    let v = j.data![0] > 0 ? ((value % total) + total) % total : Math.min(total, Math.max(0, value));
+    for (const x of list) {
+      if (v <= x.length || x === list[list.length - 1]) {
+        if (x.kind === "line") {
+          const f = x.length ? v / x.length : 0;
+          return { x: x.from.x + (x.to.x - x.from.x) * f, y: x.from.y + (x.to.y - x.from.y) * f };
+        }
+        const q = x.start + (x.dir * v) / x.r;
+        return { x: x.c.x + Math.cos(q) * x.r, y: x.c.y + Math.sin(q) * x.r };
+      }
+      v -= x.length;
+    }
+    return k.w(j.refs[0]);
+  },
 });
 
 /** Slot: a point of one body slides along a line of another. */
@@ -402,6 +421,11 @@ jointKinds.register({
   },
   range: (doc, j) => [0, dist(doc.points[j.refs[1]], doc.points[j.refs[2]])],
   anchor: (k, j) => k.w(j.refs[0]),
+  along(k, j, value) {
+    const l1 = k.w(j.refs[1]), l2 = k.w(j.refs[2]);
+    const l = dist(l1, l2) || 1;
+    return { x: l1.x + ((l2.x - l1.x) * value) / l, y: l1.y + ((l2.y - l1.y) * value) / l };
+  },
 });
 
 /** Curved slot: a point of one body runs along an arc or circle of another. */
@@ -451,6 +475,12 @@ jointKinds.register({
     return [0, sweep * DEG];
   },
   anchor: (k, j) => k.w(j.refs[0]),
+  along(k, j, value) {
+    const c = k.w(j.refs[1]);
+    const r = radius(k.doc, j);
+    const q = (j.refs.length < 5 ? 0 : sketchAngle(k.doc, j, 3)) + value / DEG + k.angle(j.a);
+    return { x: c.x + Math.cos(q) * r, y: c.y + Math.sin(q) * r };
+  },
 });
 
 function radius(doc: SketchDoc, j: Joint): number {

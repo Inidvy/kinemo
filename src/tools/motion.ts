@@ -10,6 +10,45 @@ import type { Tool } from "./types";
 // ------------------------------------------------------------------ move
 
 let grab: { body: Id; local: Vec } | null = null;
+/** A joint being dragged along its slot or track. */
+let slide: Id | null = null;
+
+/**
+ * The slider value of the point on a joint's path nearest the cursor, found
+ * by walking along the path from where the joint is now. Walking keeps the
+ * joint on its own stretch of the path instead of jumping to another stretch
+ * that happens to pass close by.
+ */
+function nearestAlong(ed: Editor, jointId: Id, to: Vec): number | null {
+  const m = ed.mech;
+  const j = m.joint(jointId);
+  const kind = j && jointKinds.get(j.kind);
+  if (!j || !kind?.along) return null;
+  const k = m.context(m.current());
+  const [lo, hi] = kind.range(ed.doc, j);
+  const wraps = !!kind.wraps?.(j);
+  const span = hi - lo;
+  const clamp = (v: number) => (wraps ? v : Math.min(hi, Math.max(lo, v)));
+  const f = (v: number) => {
+    const p = kind.along!(k, j, clamp(v));
+    return Math.hypot(p.x - to.x, p.y - to.y);
+  };
+  let v = kind.measure(k, j);
+  let step = span / 200;
+  // Walk downhill in big steps, then refine.
+  for (let round = 0; round < 6; round++) {
+    let best = f(v);
+    for (let n = 0; n < 400; n++) {
+      const up = clamp(v + step), down = clamp(v - step);
+      const fu = f(up), fd = f(down);
+      if (fu < best && fu <= fd) [v, best] = [up, fu];
+      else if (fd < best) [v, best] = [down, fd];
+      else break;
+    }
+    step /= 6;
+  }
+  return clamp(v);
+}
 
 /** Into a body's sketch coordinates from world coordinates. */
 function toLocal(ed: Editor, body: Id, w: Vec): Vec {
@@ -30,6 +69,7 @@ export const moveTool: Tool = {
   down(ed, e) {
     const h = e.hit;
     grab = null;
+    slide = null;
     if (!h) {
       ed.select([]);
       return;
@@ -39,9 +79,15 @@ export const moveTool: Tool = {
       grab = { body: h.id, local: toLocal(ed, h.id, e.world) };
       ed.beginDrag();
     } else if (h.kind === "joint") {
-      // Dragging a joint moves the body it carries: a slider runs along its slot.
+      // A joint on a slot or track runs along it, round its corners.
       const m = ed.mech;
       const j = m.joint(h.id);
+      if (j && jointKinds.get(j.kind).along) {
+        slide = j.id;
+        ed.beginDrag();
+        return;
+      }
+      // Any other joint moves the body it carries.
       const body = j && [j.b, j.a].find((id) => id && ed.doc.bodies[id] && !isGround(ed.doc, id));
       if (!j || !body) return;
       const at = jointKinds.get(j.kind).anchor(m.context(m.current()), j);
@@ -50,12 +96,18 @@ export const moveTool: Tool = {
     }
   },
   move(ed, e) {
+    if (slide) {
+      const v = nearestAlong(ed, slide, e.world);
+      if (v !== null) ed.driveJoint(slide, v);
+      return;
+    }
     if (!grab) return;
     ed.motionDrag({ body: grab.body, local: grab.local, to: e.world });
   },
   up(ed) {
-    if (!grab) return;
+    if (!grab && !slide) return;
     grab = null;
+    slide = null;
     ed.endDrag();
   },
   cancel() {

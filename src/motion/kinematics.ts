@@ -221,6 +221,29 @@ export class Mechanism {
     return err < 1e-6 * L ? q : null;
   }
 
+  /**
+   * Drag a point of a body towards a target in small steps from where it is
+   * now, so the mechanism slides along the way it can move (round a track's
+   * corners, say) instead of jumping to some other pose near the target.
+   * Returns the last pose that worked, or null if none did.
+   */
+  dragTo(drag: MotionDrag): number[] | null {
+    let q = this.current();
+    if (!this.index.has(drag.body)) return null;
+    const from = applyPose(this.pose(q, drag.body), drag.local);
+    const gap = Math.hypot(drag.to.x - from.x, drag.to.y - from.y);
+    const steps = Math.min(24, Math.max(1, Math.ceil(gap / (this.size / 40))));
+    let ok = false;
+    for (let s = 1; s <= steps; s++) {
+      const to = { x: from.x + ((drag.to.x - from.x) * s) / steps, y: from.y + ((drag.to.y - from.y) * s) / steps };
+      const next = this.solve({ start: q, drag: { ...drag, to }, maxTurn: 0.8 });
+      if (!next) break;
+      q = next;
+      ok = true;
+    }
+    return ok ? q : null;
+  }
+
   /** Measured slider values for the given drivers. */
   driverValues(q: number[], drivers: Driver[]): Record<Id, number> {
     const out: Record<Id, number> = {};

@@ -83,8 +83,16 @@ export class Editor {
   /** Pull a body point towards the cursor (Motion mode). Stays put if the joints don't allow it. */
   motionDrag(drag: MotionDrag): void {
     const m = this.mech;
-    const q = m.solve({ drag, maxTurn: 0.8 });
+    const q = m.dragTo(drag);
     if (q) this.live((doc) => (doc.motion.poses = m.poses(q)));
+  }
+
+  /** Move a joint to a value (as a slider would); the mechanism follows as far as it can. */
+  driveJoint(jointId: Id, value: number): void {
+    const m = this.mech;
+    const others = Object.values(this.doc.motion.drivers).map((x) => x.joint).filter((id) => id !== jointId);
+    const r = m.driveTo(jointId, value, others);
+    this.live((doc) => (doc.motion.poses = m.poses(r.q)));
   }
 
   /** Move a slider; the mechanism follows as far as it can. */
