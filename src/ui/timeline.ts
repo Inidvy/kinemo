@@ -1,7 +1,7 @@
 import type { Editor } from "../app/editor";
 import type { Id, Keyframe, Timeline } from "../core/model";
 import { jointKinds } from "../motion/joints";
-import { clipTime, DEFAULT_TIMELINE, keysFromRecording, setKey, timelineOf, valueAt, valuesAt } from "../motion/timeline";
+import { clipTime, DEFAULT_TIMELINE, deleteKeys, keysFromRecording, setKey, shiftKeys, timelineOf, valueAt, valuesAt, type KeyRef } from "../motion/timeline";
 import { t } from "../i18n";
 import { icons } from "./icons";
 import { driverName } from "./motionPanels";
@@ -25,6 +25,17 @@ const PALETTE = ["#2069e0", "#d81b60", "#0b8a7a", "#f28c18", "#8e44ad", "#5f6b7a
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
+/** Seconds of count-in before a recording starts, remembered in this browser. */
+const LEAD_IN_KEY = "kinemo.recordLeadIn";
+function loadLeadIn(): number {
+  try {
+    const n = parseFloat(localStorage.getItem(LEAD_IN_KEY) ?? "");
+    return Number.isFinite(n) && n >= 0 ? n : 3;
+  } catch {
+    return 3;
+  }
+}
+
 /**
  * Plays the keyframe timeline: each frame the keyed sliders go to their
  * values at the playhead, and the sliders without keys stay free.
@@ -37,6 +48,9 @@ export class Player {
   private offset = 0;
   /** Slider values when the playhead last moved or a key was set: sliders moved since then get keys. */
   private base: Record<Id, number> = {};
+  /** The selected keys on the timeline. */
+  keySel: KeyRef[] = [];
+  private lead = loadLeadIn();
 
   constructor(private ed: Editor) {}
 
@@ -65,6 +79,13 @@ export class Player {
     this.started = performance.now();
     this.frame = requestAnimationFrame((now) => this.tick(now));
     ed.emit();
+  }
+
+  /** Stop and go back to the start of the clip. */
+  toStart(): void {
+    if (this.playing) this.stop();
+    this.seek(0);
+    this.ed.emit();
   }
 
   stop(): void {
@@ -156,11 +177,63 @@ export class Player {
     return this.take !== null;
   }
 
-  /** Start recording what the sliders do while you drag the mechanism or move sliders. */
+  /** The count-in before recording: when it ends, and the timer ticking it down. */
+  private count: { end: number; timer: number } | null = null;
+
+  /** Whole seconds left on the count-in before recording starts (null when not counting in). */
+  get countdown(): number | null {
+    return this.count ? Math.max(1, Math.ceil((this.count.end - performance.now()) / 1000)) : null;
+  }
+
+  /** Seconds of count-in before recording, to get the mechanism where you want it to start. */
+  get leadIn(): number {
+    return this.lead;
+  }
+
+  set leadIn(n: number) {
+    this.lead = Math.min(30, Math.max(0, n));
+    try {
+      localStorage.setItem(LEAD_IN_KEY, String(this.lead));
+    } catch {
+      // Not remembered, but still used for now.
+    }
+  }
+
+  /** Stop the count-in without recording. */
+  cancelCountdown(): void {
+    if (!this.count) return;
+    clearInterval(this.count.timer);
+    this.count = null;
+    this.ed.emit();
+  }
+
+  /**
+   * Record what the sliders do while you drag the mechanism or move sliders,
+   * after a count-in to get it where the movement should start.
+   */
   startRecording(): void {
     const ed = this.ed;
     if (!Object.keys(ed.doc.motion.drivers).length) return ed.flash(t("timeline.noSliders"));
     if (this.playing) this.stop();
+    if (this.count || this.take) return;
+    if (this.lead <= 0) return this.beginTake();
+    let shown = this.countdown;
+    const end = performance.now() + this.lead * 1000;
+    const timer = window.setInterval(() => {
+      if (performance.now() >= end) {
+        this.cancelCountdown();
+        this.beginTake();
+        return;
+      }
+      if (this.countdown !== shown) (shown = this.countdown), ed.emit();
+    }, 50);
+    this.count = { end, timer };
+    ed.emit();
+  }
+
+  private beginTake(): void {
+    const ed = this.ed;
+    if (ed.mode !== "motion") return;
     this.take = { frame: 0, t: [], v: {}, last: {} };
     const sample = (now: number) => {
       const take = this.take;
@@ -192,6 +265,7 @@ export class Player {
 
   /** Stop recording and turn the movement into smooth keys for the sliders that moved. */
   stopRecording(): void {
+    if (this.count) return this.cancelCountdown();
     const take = this.take;
     if (!take) return;
     cancelAnimationFrame(take.frame);
@@ -265,6 +339,29 @@ export class Player {
     });
     this.snapshot();
   }
+
+  /** Delete the selected keys. False when none are selected. */
+  deleteSelectedKeys(): boolean {
+    const refs = this.keySel;
+    if (!refs.length) return false;
+    this.keySel = [];
+    this.ed.change((doc) => {
+      const tl: Timeline = structuredClone(doc.motion.timeline ?? DEFAULT_TIMELINE);
+      deleteKeys(tl, refs);
+      doc.motion.timeline = tl;
+    });
+    return true;
+  }
+
+  /** Delete every key of every slider. */
+  deleteAllKeys(): void {
+    const tl0 = timelineOf(this.ed.doc);
+    if (!Object.values(tl0.keys).some((k) => k.length)) return;
+    if (this.playing) this.stop();
+    this.keySel = [];
+    this.ed.change((doc) => (doc.motion.timeline = { ...structuredClone(tl0), keys: {} }));
+    this.ed.flash(t("timeline.allDeleted"));
+  }
 }
 
 export const round = (x: number) => Math.round(x * 1000) / 1000;
@@ -282,8 +379,7 @@ export function timelinePlayer(): Player | null {
  */
 export function mountTimeline(el: HTMLElement, ed: Editor): Player {
   const p = (player = new Player(ed));
-  /** The selected key: slider and index into its keys. */
-  let sel: { driver: Id; i: number } | null = null;
+  const isSel = (driver: Id, i: number) => p.keySel.some((r) => r.driver === driver && r.i === i);
   let lastOpen = false;
   /** A video being recorded, and how far a GIF has got (null when none is being made). */
   let video: MediaRecorder | null = null;
@@ -315,11 +411,11 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
     if (el.hidden) return;
     const doc = ed.doc;
     const tl = timelineOf(doc);
-    if (sel && !tl.keys[sel.driver]?.[sel.i]) sel = null;
+    p.keySel = p.keySel.filter((r) => tl.keys[r.driver]?.[r.i]);
     // While playing or recording only the playhead moves: rebuilding every
     // frame would pull the Pause or Stop button out from under the pointer.
-    const flags = `${p.playing}|${p.recording}|${!!video}|${gifProgress === null ? "" : Math.round(gifProgress * 100)}`;
-    const running = p.playing || p.recording;
+    const flags = `${p.playing}|${p.recording}|${p.countdown}|${!!video}|${gifProgress === null ? "" : Math.round(gifProgress * 100)}`;
+    const running = p.playing || p.recording || p.countdown !== null;
     if (running && flags === lastFlags) {
       patch();
       return;
@@ -344,7 +440,7 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
         const keys = tl.keys[d.id] ?? [];
         const diamonds = keys
           .map((k, i) => {
-            const on = sel?.driver === d.id && sel.i === i;
+            const on = isSel(d.id, i);
             const how = segKind(k);
             const seg = i < keys.length - 1 ? `<span class="tl-seg ${how}" data-seg="${i}" data-driver="${d.id}" style="left:${pct(k.t)};width:calc(${pct(keys[i + 1].t)} - ${pct(k.t)})" title="${t(`timeline.seg.${how}`)}"></span>` : "";
             return `${seg}<span class="tl-key${on ? " on" : ""}" data-key="${i}" data-driver="${d.id}" style="left:${pct(k.t)}" title="${k.t.toFixed(2)} s · ${fmt(ed, d.id, k.v)}"></span>`;
@@ -364,27 +460,31 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
           )
           .join("")
       : "";
-    const k = sel && tl.keys[sel.driver][sel.i];
-    const editor = k
+    const picked = p.keySel.map((r) => tl.keys[r.driver][r.i]);
+    const one = picked.length === 1 ? picked[0] : null;
+    const segAll = picked.length && picked.every((x) => segKind(x) === segKind(picked[0])) ? segKind(picked[0]) : null;
+    const editor = picked.length
       ? `<span class="tl-keyedit">
-          <span class="tl-keyname">◆ ${esc(driverName(ed, doc.motion.drivers[sel!.driver]))}</span>
-          <label>${t("timeline.at")}<input type="number" step="0.05" min="0" data-tl="kt" value="${k.t}"> s</label>
-          <label>${t("timeline.value")}<input type="number" step="any" data-tl="kv" value="${round(k.v)}"></label>
-          <select data-tl="kseg" title="${t("timeline.segTip")}">${SEGS.map((x) => `<option value="${x}"${segKind(k) === x ? " selected" : ""}>${t(`timeline.segShort.${x}`)}</option>`).join("")}</select>
-          <button class="icon-btn" data-tl="kdel" title="${t("panel.delete")}">${icons.delete}</button>
+          <span class="tl-keyname">◆ ${one ? esc(driverName(ed, doc.motion.drivers[p.keySel[0].driver])) : t("timeline.nKeys", { n: picked.length })}</span>
+          ${one ? `<label>${t("timeline.at")}<input type="number" step="0.05" min="0" data-tl="kt" value="${one.t}"> s</label>
+          <label>${t("timeline.value")}<input type="number" step="any" data-tl="kv" value="${round(one.v)}"></label>` : ""}
+          <select data-tl="kseg" title="${t("timeline.segTip")}">${segAll ? "" : `<option value="" selected>${t("timeline.segMixed")}</option>`}${SEGS.map((x) => `<option value="${x}"${segAll === x ? " selected" : ""}>${t(`timeline.segShort.${x}`)}</option>`).join("")}</select>
+          <button class="icon-btn" data-tl="kdel" title="${t("timeline.deleteKeys")} (Del)">${icons.delete}</button>
         </span>`
       : "";
     const anyKeys = Object.values(tl.keys).some((x) => x.length);
-    const busy = p.recording || !!video || gifProgress !== null;
+    const counting = p.countdown;
+    const busy = p.recording || counting !== null || !!video || gifProgress !== null;
     el.innerHTML = `
       <div class="tl-head">
         <span class="tl-group">
           <button class="icon-btn tl-play" data-tl="play" ${busy ? "disabled" : ""} title="${t(p.playing ? "timeline.pause" : "timeline.play")} (Space)">${p.playing ? icons.pause : icons.play}</button>
+          <button class="icon-btn tl-stop" data-tl="stop" ${busy ? "disabled" : ""} title="${t("timeline.stop")}">${icons.stop}</button>
           <span class="tl-time">${p.time.toFixed(2)}<span class="muted"> / ${tl.length} s</span></span>
         </span>
         <span class="tl-group">
           <button class="btn tl-keybtn" data-tl="key" ${busy ? "disabled" : ""} title="${t("timeline.keyTip")}">${icons.key}${t("timeline.key")}</button>
-          <button class="btn tl-rec${p.recording ? " on" : ""}" data-tl="rec" ${video || gifProgress !== null ? "disabled" : ""} title="${t("record.tip")}"><span class="tl-recdot"></span>${t(p.recording ? "record.stop" : "record.start")}</button>
+          <button class="btn tl-rec${p.recording ? " on" : ""}${counting !== null ? " counting" : ""}" data-tl="rec" ${video || gifProgress !== null ? "disabled" : ""} title="${t("record.tip")}"><span class="tl-recdot"></span>${counting !== null ? t("record.cancel", { n: counting }) : t(p.recording ? "record.stop" : "record.start")}</button>
         </span>
         ${editor}
         <span class="tl-spacer"></span>
@@ -395,6 +495,8 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
             <label>${t("timeline.playMode")}<select data-tl="mode">
               ${(["once", "loop", "pingpong"] as const).map((m) => `<option value="${m}"${tl.mode === m ? " selected" : ""}>${t(`timeline.${m}`)}</option>`).join("")}
             </select></label>
+            <label title="${t("record.leadInTip")}">${t("record.leadIn")}<input type="number" min="0" max="30" step="1" data-tl="lead" value="${p.leadIn}"> s</label>
+            <button class="btn tl-delall" data-tl="delall" ${anyKeys && !busy ? "" : "disabled"}>${icons.delete}${t("timeline.deleteAll")}</button>
           </div>
         </details>
         <span class="tl-group tl-export">
@@ -411,7 +513,8 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
         ${rows}
         ${chart}
         <div class="tl-playhead-wrap"><div class="tl-playhead" style="left:${pct(p.time)}"></div></div>
-      </div>`;
+      </div>
+      ${counting !== null ? `<div class="tl-countdown"><b>${counting}</b><span>${t("record.getReady")}</span></div>` : ""}`;
     shown = series ?? [];
     for (const c of el.querySelectorAll<HTMLCanvasElement>("canvas[data-chart]")) {
       const i = Number(c.dataset.chart);
@@ -457,6 +560,11 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
       const what = b.dataset.tl;
       b.blur();
       if (what === "play") p.toggle();
+      if (what === "stop") p.toStart();
+      if (what === "delall") {
+        menuOpen = false;
+        p.deleteAllKeys();
+      }
       if (what === "key") p.key();
       if (what === "video") {
         if (video) p.stop();
@@ -474,19 +582,13 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
         else p.startRecording();
       }
       if (what === "csv") exportCsv();
-      if (what === "kdel" && sel) {
-        const s = sel;
-        sel = null;
-        editTimeline((tl) => {
-          tl.keys[s.driver].splice(s.i, 1);
-          if (!tl.keys[s.driver].length) delete tl.keys[s.driver];
-        });
-      }
+      if (what === "kdel") p.deleteSelectedKeys();
       ed.emit();
       return;
     }
     const name = target.closest<HTMLElement>("[data-pick]");
-    if (name) ed.select([name.dataset.pick!]);
+    // Shift- or Ctrl-click adds a slider to the selection, so a key goes to several at once.
+    if (name) ed.select([name.dataset.pick!], e.shiftKey || e.ctrlKey || e.metaKey);
   });
 
   el.addEventListener("toggle", (e) => {
@@ -499,18 +601,21 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
     const n = parseFloat(input.value);
     if (what === "length" && n > 0) editTimeline((tl) => (tl.length = n));
     if (what === "mode") editTimeline((tl) => (tl.mode = input.value as Timeline["mode"]));
-    if (!sel) return;
-    const s = sel;
-    if (what === "kv" && Number.isFinite(n)) editTimeline((tl) => (tl.keys[s.driver][s.i].v = n));
-    if (what === "kseg") editTimeline((tl) => setSeg(tl.keys[s.driver][s.i], input.value as Seg));
-    if (what === "kt" && Number.isFinite(n)) {
-      editTimeline((tl) => {
-        const keys = tl.keys[s.driver];
-        const k = keys[s.i];
-        k.t = Math.max(0, n);
-        keys.sort((a, b) => a.t - b.t);
-        sel = { driver: s.driver, i: keys.indexOf(k) };
-      });
+    if (what === "lead" && n >= 0) (p.leadIn = n), ed.emit();
+    const refs = p.keySel;
+    if (what === "kseg" && refs.length && input.value) editTimeline((tl) => refs.forEach((r) => setSeg(tl.keys[r.driver][r.i], input.value as Seg)));
+    if (refs.length === 1) {
+      const s = refs[0];
+      if (what === "kv" && Number.isFinite(n)) editTimeline((tl) => (tl.keys[s.driver][s.i].v = n));
+      if (what === "kt" && Number.isFinite(n)) {
+        editTimeline((tl) => {
+          const keys = tl.keys[s.driver];
+          const k = keys[s.i];
+          k.t = Math.max(0, n);
+          keys.sort((a, b) => a.t - b.t);
+          p.keySel = [{ driver: s.driver, i: keys.indexOf(k) }];
+        });
+      }
     }
     input.blur();
   });
@@ -533,14 +638,15 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
     if (!h) return;
     const driver = h.dataset.driver!;
     const i = Number(h.dataset.key);
-    sel = null;
+    p.keySel = [];
     editTimeline((tl) => {
       tl.keys[driver]?.splice(i, 1);
       if (tl.keys[driver] && !tl.keys[driver].length) delete tl.keys[driver];
     });
   });
 
-  // Drag a key to retime it; press anywhere else on the lanes to scrub.
+  // Click a key to select it (Shift or Ctrl adds to the selection) and drag to retime the selected keys.
+  // Press anywhere else on the lanes to scrub; Shift- or Ctrl-drag there to box-select keys.
   el.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
     const target = e.target as HTMLElement;
@@ -548,41 +654,38 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
     const onLanes = target.closest(".tl-lane, .tl-ruler, .tl-seg");
     if (!key && !onLanes) return;
     e.preventDefault();
+    const add = e.shiftKey || e.ctrlKey || e.metaKey;
     if (key) {
-      const driver = key.dataset.driver!;
-      sel = { driver, i: Number(key.dataset.key) };
-      const t0 = timelineOf(ed.doc).keys[driver][sel.i].t;
+      const ref = { driver: key.dataset.driver!, i: Number(key.dataset.key) };
+      const was = isSel(ref.driver, ref.i);
+      if (add) {
+        p.keySel = was ? p.keySel.filter((r) => r.driver !== ref.driver || r.i !== ref.i) : [...p.keySel, ref];
+        return ed.emit();
+      }
+      if (!was) p.keySel = [ref];
+      const start = structuredClone(timelineOf(ed.doc));
+      const refs = p.keySel;
+      const t0 = start.keys[ref.driver][ref.i].t;
       const x0 = e.clientX;
       let moved = false;
       const move = (ev: PointerEvent) => {
         if (!moved && Math.abs(ev.clientX - x0) < 3) return;
         if (!moved) ed.beginDrag();
         moved = true;
-        const time = snap(timeAt(ev.clientX));
+        const dt = snap(timeAt(ev.clientX)) - t0;
         ed.live((doc) => {
-          const tl: Timeline = structuredClone(doc.motion.timeline ?? DEFAULT_TIMELINE);
-          const keys = tl.keys[driver];
-          const k = keys[sel!.i];
-          k.t = time;
-          keys.sort((a, b) => a.t - b.t);
-          sel = { driver, i: keys.indexOf(k) };
+          const tl = structuredClone(start);
+          p.keySel = shiftKeys(tl, refs, dt);
           doc.motion.timeline = tl;
         });
       };
       const up = () => {
         window.removeEventListener("pointermove", move);
         window.removeEventListener("pointerup", up);
-        if (moved) {
-          // Two keys at one time: the moved one wins.
-          ed.live((doc) => {
-            const keys = doc.motion.timeline?.keys[driver];
-            if (!keys) return;
-            const k = keys[sel!.i];
-            doc.motion.timeline!.keys[driver] = keys.filter((x) => x === k || Math.abs(x.t - k.t) > 1e-6);
-            sel = { driver, i: doc.motion.timeline!.keys[driver].indexOf(k) };
-          });
-          ed.endDrag();
-        } else {
+        if (moved) ed.endDrag();
+        else {
+          // A plain click on one of several selected keys picks just that one.
+          p.keySel = [ref];
           p.seek(t0);
           ed.emit();
         }
@@ -592,7 +695,8 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
       ed.emit();
       return;
     }
-    sel = null;
+    if (add) return boxSelect(e);
+    p.keySel = [];
     const wasPlaying = p.playing;
     if (wasPlaying) p.stop();
     ed.beginDrag();
@@ -607,6 +711,37 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
   });
+
+  /** Drag a box over the lanes to add the keys inside it to the selection. */
+  const boxSelect = (e: PointerEvent) => {
+    const box = document.createElement("div");
+    box.className = "tl-box";
+    el.append(box);
+    const x0 = e.clientX, y0 = e.clientY;
+    const rect = (x: number, y: number) => ({ l: Math.min(x0, x), r: Math.max(x0, x), t: Math.min(y0, y), b: Math.max(y0, y) });
+    const move = (ev: PointerEvent) => {
+      const r = rect(ev.clientX, ev.clientY);
+      Object.assign(box.style, { left: `${r.l}px`, top: `${r.t}px`, width: `${r.r - r.l}px`, height: `${r.b - r.t}px` });
+    };
+    const up = (ev: PointerEvent) => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      box.remove();
+      const r = rect(ev.clientX, ev.clientY);
+      const inside: KeyRef[] = [];
+      for (const k of el.querySelectorAll<HTMLElement>("[data-key]")) {
+        const b = k.getBoundingClientRect();
+        const cx = (b.left + b.right) / 2, cy = (b.top + b.bottom) / 2;
+        const ref = { driver: k.dataset.driver!, i: Number(k.dataset.key) };
+        if (cx >= r.l - 4 && cx <= r.r + 4 && cy >= r.t - 4 && cy <= r.b + 4 && !isSel(ref.driver, ref.i)) inside.push(ref);
+      }
+      p.keySel = [...p.keySel, ...inside];
+      ed.emit();
+    };
+    move(e);
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
 
   ed.subscribe(update);
   update();

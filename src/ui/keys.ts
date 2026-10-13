@@ -2,6 +2,7 @@ import type { Editor } from "../app/editor";
 import { tools, toolInMode } from "../tools";
 import { actions, actionInMode } from "./actions";
 import { setTool } from "./toolbar";
+import { timelinePlayer } from "./timeline";
 
 /** Global keyboard shortcuts, read from the tool and action registries. */
 export function mountKeys(ed: Editor): void {
@@ -12,6 +13,14 @@ export function mountKeys(ed: Editor): void {
     const ctrl = e.ctrlKey || e.metaKey;
 
     if (key === "escape") {
+      // Escape first stops a recording's count-in, then lets go of selected keys.
+      const p = ed.mode === "motion" && ed.animation ? timelinePlayer() : null;
+      if (p?.countdown != null) return p.cancelCountdown();
+      if (p?.keySel.length) {
+        p.keySel = [];
+        ed.emit();
+        return;
+      }
       // Cancel what the tool is doing and go back to Select (Move in Motion mode).
       const tool = tools.find(ed.tool);
       const cancelled = !!tool?.cancel?.(ed);

@@ -1,11 +1,30 @@
 import { describe, it, expect } from "vitest";
 import { addConstraint, addGeom, addPoint, emptyDoc, type Line, type SketchDoc, type Timeline } from "../src/core/model";
-import { clipTime, setKey, valueAt } from "../src/motion/timeline";
+import { clipTime, deleteKeys, setKey, shiftKeys, valueAt } from "../src/motion/timeline";
 import { sweepPaths } from "../src/motion/paths";
 import { Mechanism } from "../src/motion/kinematics";
 import { addDriver } from "../src/motion/drivers";
 
 describe("timeline", () => {
+  it("deletes several keys across sliders, dropping emptied sliders", () => {
+    const tl: Timeline = { length: 4, mode: "loop", keys: { a: [{ t: 0, v: 0 }, { t: 1, v: 1 }, { t: 2, v: 2 }], b: [{ t: 1, v: 5 }] } };
+    deleteKeys(tl, [{ driver: "a", i: 0 }, { driver: "a", i: 2 }, { driver: "b", i: 0 }]);
+    expect(tl.keys).toEqual({ a: [{ t: 1, v: 1 }] });
+  });
+
+  it("moves selected keys together within the clip, replacing keys they land on", () => {
+    const tl: Timeline = { length: 4, mode: "loop", keys: { a: [{ t: 0, v: 0 }, { t: 1, v: 1 }, { t: 2, v: 2 }], b: [{ t: 1, v: 5 }] } };
+    const at = shiftKeys(tl, [{ driver: "a", i: 0 }, { driver: "b", i: 0 }], 1);
+    expect(tl.keys.a).toEqual([{ t: 1, v: 0 }, { t: 2, v: 2 }]);
+    expect(tl.keys.b).toEqual([{ t: 2, v: 5 }]);
+    expect(at).toEqual([{ driver: "a", i: 0 }, { driver: "b", i: 0 }]);
+    // Clamped so no key leaves the clip.
+    shiftKeys(tl, [{ driver: "a", i: 1 }, { driver: "b", i: 0 }], 10);
+    expect(tl.keys.a[1].t).toBe(4);
+    shiftKeys(tl, [{ driver: "a", i: 0 }], -5);
+    expect(tl.keys.a[0].t).toBe(0);
+  });
+
   it("eases between keys unless a stretch is steady", () => {
     const keys = [{ t: 0, v: 0 }, { t: 2, v: 10 }];
     expect(valueAt(keys, -1)).toBe(0);

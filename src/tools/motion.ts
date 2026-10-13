@@ -71,6 +71,11 @@ export const moveTool: Tool = {
     const h = e.hit;
     grab = null;
     slide = null;
+    // Shift- or Ctrl-click adds to the selection (to key several sliders at once) without moving anything.
+    if (e.shift || e.ctrl) {
+      if (h) ed.select([h.id], true);
+      return;
+    }
     if (!h) {
       ed.select([]);
       return;
