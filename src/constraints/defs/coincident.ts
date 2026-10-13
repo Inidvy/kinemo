@@ -1,7 +1,10 @@
 import type { ConstraintType } from "../types";
 import { split, P } from "../select";
 
-/** Two or more points share a position. Chains when more than two are picked. */
+/**
+ * Two or more points share a position (chained when more than two are
+ * picked). Points with one line, circle or arc become "point on curve".
+ */
 export const coincident: ConstraintType = {
   id: "coincident",
   label: "c.coincident",
@@ -9,7 +12,8 @@ export const coincident: ConstraintType = {
   shortcut: "e",
   fromSelection(doc, sel) {
     const { points, geoms } = split(doc, sel);
-    if (geoms.length > 0 || points.length < 2) return "hint.selectPoints2";
+    if (geoms.length === 1 && points.length >= 1) return points.map((p) => ({ type: "onCurve", refs: [p, geoms[0].id] }));
+    if (geoms.length > 0 || points.length < 2) return "hint.selectCoincident";
     return points.slice(1).map((p, i) => ({ type: "coincident", refs: [points[i], p] }));
   },
   toPrimitives(_doc, c) {
@@ -24,6 +28,7 @@ export const onCurve: ConstraintType = {
   id: "onCurve",
   label: "c.onCurve",
   glyph: "⊙",
+  hidden: true,
   fromSelection(doc, sel) {
     const { points, geoms } = split(doc, sel);
     if (points.length < 1 || geoms.length !== 1) return "hint.selectPointAndCurve";

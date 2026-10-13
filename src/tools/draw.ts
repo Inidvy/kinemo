@@ -4,16 +4,16 @@ import { colors } from "../render/style";
 import type { View } from "../render/view";
 import type { Editor } from "../app/editor";
 import { icons } from "../ui/icons";
-import { inferAxis, placePoint } from "./build";
+import { placePoint } from "./build";
 import type { Snap, Tool } from "./types";
 
-function previewStyle(ctx: CanvasRenderingContext2D) {
+export function previewStyle(ctx: CanvasRenderingContext2D) {
   ctx.strokeStyle = colors.preview;
   ctx.lineWidth = 1.5;
   ctx.setLineDash([]);
 }
 
-function strokeLine(ctx: CanvasRenderingContext2D, v: View, a: Vec, b: Vec) {
+export function strokeLine(ctx: CanvasRenderingContext2D, v: View, a: Vec, b: Vec) {
   const sa = v.toScreen(a), sb = v.toScreen(b);
   ctx.beginPath();
   ctx.moveTo(sa.x, sa.y);
@@ -21,67 +21,12 @@ function strokeLine(ctx: CanvasRenderingContext2D, v: View, a: Vec, b: Vec) {
   ctx.stroke();
 }
 
-function axisLabel(ctx: CanvasRenderingContext2D, v: View, at: Vec, text: string) {
+export function axisLabel(ctx: CanvasRenderingContext2D, v: View, at: Vec, text: string) {
   const s = v.toScreen(at);
   ctx.fillStyle = colors.preview;
   ctx.font = "11px system-ui, sans-serif";
   ctx.fillText(text, s.x + 10, s.y + 16);
 }
-
-// ---------------------------------------------------------------- line
-
-let lineStart: Snap | null = null;
-let lineCursor: Vec | null = null;
-
-export const lineTool: Tool = {
-  id: "line",
-  label: "tool.line",
-  icon: icons.line,
-  shortcut: "l",
-  hint: "hint.line",
-  snaps: true,
-  activate() {
-    lineStart = null;
-  },
-  cancel() {
-    if (!lineStart) return false;
-    lineStart = null;
-    return true;
-  },
-  move(_ed, e) {
-    lineCursor = e.snap.at;
-  },
-  down(ed, e) {
-    if (!lineStart) {
-      lineStart = e.snap;
-      return;
-    }
-    const start = lineStart;
-    let end: Snap = e.snap;
-    const inf = end.kind === "none" ? inferAxis(start.at, end.at) : { axis: null, at: end.at };
-    if (end.kind === "none") end = { kind: "none", at: inf.at };
-    if (dist(start.at, end.at) < ed.view.px(3)) return;
-    let endId: Id = "";
-    ed.change((doc) => {
-      const p1 = placePoint(doc, start);
-      const p2 = placePoint(doc, end);
-      const l = addGeom<Line>(doc, { kind: "line", p1, p2 });
-      if (inf.axis) addConstraint(doc, { type: inf.axis, refs: [l] });
-      endId = p2;
-    });
-    // Continue the chain from the new end point.
-    const p = ed.doc.points[endId];
-    lineStart = p ? { kind: "point", id: endId, at: { x: p.x, y: p.y } } : null;
-  },
-  overlay({ ctx, ed }) {
-    if (!lineStart || !lineCursor) return;
-    const inf = inferAxis(lineStart.at, lineCursor);
-    previewStyle(ctx);
-    strokeLine(ctx, ed.view, lineStart.at, inf.at);
-    const len = dist(lineStart.at, inf.at).toFixed(1);
-    axisLabel(ctx, ed.view, inf.at, inf.axis ? `${len}  ${inf.axis === "horizontal" ? "H" : "V"}` : len);
-  },
-};
 
 // ---------------------------------------------------------------- circle
 

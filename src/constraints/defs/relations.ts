@@ -1,6 +1,7 @@
 import type { ConstraintType, Primitive } from "../types";
 import { split, geomAnchor, P } from "../select";
-import type { Constraint } from "../../core/model";
+import type { Constraint, Geometry, Id, SketchDoc, Vec } from "../../core/model";
+import { dot, perp, sub } from "../../core/geom";
 
 const anchorFirst = (doc: Parameters<NonNullable<ConstraintType["anchor"]>>[0], c: Constraint) =>
   geomAnchor(doc, c.refs[0]);
@@ -39,6 +40,44 @@ export const perpendicular: ConstraintType = {
   anchor: anchorFirst,
 };
 
+/** Direction of a curve at one of its points (lines p1→p2, arcs counter-clockwise). */
+function directionAt(doc: SketchDoc, g: Geometry, at: Id): Vec {
+  if (g.kind === "line") return sub(doc.points[g.p2], doc.points[g.p1]);
+  return perp(sub(doc.points[at], doc.points[g.c]));
+}
+
+function endpoints(g: Geometry): Id[] {
+  return g.kind === "line" ? [g.p1, g.p2] : g.kind === "arc" ? [g.s, g.e] : [];
+}
+
+/** An end point of `a` that is the same as, or coincident with, an end point of `b`. */
+function sharedEnd(doc: SketchDoc, a: Geometry, b: Geometry): Id | null {
+  const eb = new Set(endpoints(b));
+  for (const p of endpoints(a)) {
+    if (eb.has(p)) return p;
+    for (const c of Object.values(doc.constraints)) {
+      if (c.type === "coincident" && c.refs.includes(p) && c.refs.some((r) => r !== p && eb.has(r))) return p;
+    }
+  }
+  return null;
+}
+
+/**
+ * Build a tangent constraint. When the two curves meet at an end point it
+ * becomes tangency at that point (like FreeCAD), which the solver handles
+ * far better than general tangency plus a coincident.
+ */
+export function makeTangent(doc: SketchDoc, a: Geometry, b: Geometry): Omit<Constraint, "id"> {
+  const at = sharedEnd(doc, a, b);
+  if (at) {
+    const angle = dot(directionAt(doc, a, at), directionAt(doc, b, at)) >= 0 ? 0 : Math.PI;
+    return { type: "tangent", refs: [a.id, b.id, at], data: { angle } };
+  }
+  // Keep lines first so toPrimitives can rely on the order.
+  const sorted = [a, b].sort((x, y) => (x.kind === "line" ? -1 : y.kind === "line" ? 1 : 0));
+  return { type: "tangent", refs: sorted.map((g) => g.id) };
+}
+
 export const tangent: ConstraintType = {
   id: "tangent",
   label: "c.tangent",
@@ -47,13 +86,15 @@ export const tangent: ConstraintType = {
   fromSelection(doc, sel) {
     const { geoms, points, curves } = split(doc, sel);
     if (geoms.length !== 2 || points.length || curves.length < 1) return "hint.selectTangent";
-    // Keep lines first so toPrimitives can rely on the order.
-    const sorted = [...geoms].sort((a, b) => (a.kind === "line" ? -1 : b.kind === "line" ? 1 : 0));
-    return [{ type: "tangent", refs: sorted.map((g) => g.id) }];
+    return [makeTangent(doc, geoms[0], geoms[1])];
   },
   toPrimitives(doc, c) {
-    const [a, b] = c.refs.map((id) => doc.geoms[id]);
     const id = `${c.id}#0`;
+    if (c.refs.length === 3) {
+      const [a, b, p] = c.refs;
+      return [{ id, type: "angle_via_point", crv1_id: a, crv2_id: b, p_id: p, angle: c.data?.angle ?? 0 }];
+    }
+    const [a, b] = c.refs.map((id) => doc.geoms[id]);
     if (a.kind === "line") {
       return b.kind === "circle"
         ? [{ id, type: "tangent_lc", l_id: a.id, c_id: b.id }]
@@ -65,7 +106,7 @@ export const tangent: ConstraintType = {
     const arc = a.kind === "arc" ? a : b;
     return [{ id, type: "tangent_ca", c_id: circle.id, a_id: arc.id }];
   },
-  anchor: anchorFirst,
+  anchor: (doc, c) => (c.refs.length === 3 ? P(doc, c.refs[2]) : geomAnchor(doc, c.refs[0])),
 };
 
 export const equal: ConstraintType = {

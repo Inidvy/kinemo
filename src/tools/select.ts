@@ -29,6 +29,7 @@ export const selectTool: Tool = {
   id: "select",
   label: "tool.select",
   icon: icons.select,
+  shortcut: "s",
   hint: "hint.select",
   down(ed, e) {
     pressed = e;

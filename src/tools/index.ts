@@ -1,8 +1,9 @@
 import { Registry } from "../core/registry";
 import type { Tool } from "./types";
 import { selectTool } from "./select";
-import { lineTool, arcTool, circleTool, rectTool, rectCenterTool, pointTool } from "./draw";
+import { arcTool, circleTool, rectTool, rectCenterTool, pointTool } from "./draw";
 import { dimensionTool } from "./dimension";
+import { lineTool } from "./polyline";
 
 export const tools = new Registry<Tool>("tools");
 

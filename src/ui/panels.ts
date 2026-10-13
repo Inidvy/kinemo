@@ -136,7 +136,7 @@ export function mountProperties(el: HTMLElement, ed: Editor): void {
     if (geomSel.length) {
       const fits = constraintTypes
         .all()
-        .filter((c) => !c.dimension && typeof c.fromSelection(doc, geomSel) !== "string");
+        .filter((c) => !c.dimension && !c.hidden && typeof c.fromSelection(doc, geomSel) !== "string");
       if (fits.length) {
         html += `<div class="panel-title">${t("panel.addConstraint")}</div><div class="chips">`;
         html += fits

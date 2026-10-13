@@ -96,7 +96,7 @@ builtins.forEach((a) => actions.register(a));
 
 // Every non-dimension constraint type becomes an action automatically.
 for (const c of constraintTypes.all()) {
-  if (c.dimension) continue;
+  if (c.dimension || c.hidden) continue;
   actions.register({
     id: `constraint:${c.id}`,
     label: c.label,

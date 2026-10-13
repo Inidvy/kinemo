@@ -19,6 +19,8 @@ export interface ConstraintType {
   glyph: string;
   /** Keyboard shortcut (single key, lowercase). */
   shortcut?: string;
+  /** Created only by other constraints or tools; no button of its own. */
+  hidden?: boolean;
   /** Dimensions show as arrows with a value instead of an icon. */
   dimension?: boolean;
   /** Unit for dimension values. */

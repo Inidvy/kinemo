@@ -21,6 +21,11 @@ export function mountKeys(ed: Editor): void {
       return;
     }
 
+    if (!ctrl && !e.shiftKey && tools.find(ed.tool)?.key?.(ed, key)) {
+      e.preventDefault();
+      ed.emit();
+      return;
+    }
     if (!ctrl) {
       const tool = tools.all().find((t) => t.shortcut === key && !!t.shift === e.shiftKey);
       if (tool) {

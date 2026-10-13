@@ -19,12 +19,14 @@ Pushing to `main` deploys to GitHub Pages (Settings → Pages → Source: GitHub
 
 | Key | Action |
 | --- | --- |
-| L | Line (click points; Esc ends the chain) |
+| S | Select |
+| L | Polyline: click points; M cycles line / tangent arc / normal arc; starting on an existing end point continues from it; Esc ends the chain |
 | A | Arc (centre, start, end; direction follows the cursor) |
 | C | Circle |
 | R / Shift+R | Rectangle by two corners / by centre and corner |
 | D | Dimension: click geometry, then click where the label goes, type a value |
-| E H V P T | Coincident, horizontal, vertical, parallel, tangent |
+| E | Coincident (two points), or point on curve (points and one line, circle or arc) |
+| H V P T | Horizontal, vertical, parallel, tangent |
 | X | Toggle construction |
 | K | Tag as track |
 | I | Show or hide constraint icons |
@@ -34,7 +36,7 @@ Pushing to `main` deploys to GitHub Pages (Settings → Pages → Source: GitHub
 | Ctrl+S / Ctrl+O | Save / open a `.kinemo.json` file |
 | Esc | Cancel, then back to Select |
 
-Other constraints (point on curve, perpendicular, equal, midpoint, concentric, symmetric, fix) are on the toolbar and in the right panel, which lists only the constraints that fit the current selection. Middle- or right-drag pans, the wheel zooms, and two fingers pan and pinch on touch screens.
+Other constraints (perpendicular, equal, midpoint, concentric, symmetric, fix) are on the toolbar and in the right panel, which lists only the constraints that fit the current selection. Middle- or right-drag pans, the wheel zooms, and two fingers pan and pinch on touch screens.
 
 Line colour shows status: blue is still free to move, black is fully defined, red is a conflicting constraint.
 

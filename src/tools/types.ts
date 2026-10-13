@@ -46,4 +46,6 @@ export interface Tool {
   /** Esc pressed. Return true if handled (otherwise the editor goes back to Select). */
   cancel?(ed: Editor): boolean;
   overlay?(o: Overlay): void;
+  /** A key pressed while this tool is active. Return true if handled. */
+  key?(ed: Editor, key: string): boolean;
 }
