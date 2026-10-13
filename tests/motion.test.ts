@@ -49,6 +49,16 @@ function jointsHold(m: Mechanism, q: number[]) {
 }
 
 describe("motion", () => {
+  it("gives pins stacked on one point a single letter", () => {
+    const { doc, crank } = fourBar();
+    // A third bar pinned where the crank meets the coupler.
+    const extra = bar(doc, 0, 20, -20, 40);
+    addConstraint(doc, { type: "coincident", refs: [crank.p2, extra.p1] });
+    body(doc, "extra", [extra.id]);
+    const m = new Mechanism(doc);
+    expect(m.joints.map((j) => m.letter(j.id))).toEqual(["A", "B", "C", "D", "B"]);
+  });
+
   it("finds pins between bodies and counts one degree of freedom for a four-bar", () => {
     const { doc } = fourBar();
     const m = new Mechanism(doc);

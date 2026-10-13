@@ -6,7 +6,7 @@ import { t } from "../i18n";
 import { icons } from "./icons";
 import { driverName } from "./motionPanels";
 import { chartSeries, drawSeries, fmtValue, valueOn, type Series } from "./chart";
-import { download, exportGif, recordVideo } from "./exportMedia";
+import { download, EXPORT_SCALES, exportGif, exportScale, recordVideo, setExportScale } from "./exportMedia";
 
 /** How the stretch after a key moves: eased in and out, at a steady speed, or on a smooth curve through the keys. */
 const SEGS = ["eased", "steady", "smooth"] as const;
@@ -496,6 +496,7 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
         </span>
         <span class="tl-group tl-export">
           <span class="muted">${t("export.title")}</span>
+          <select data-tl="quality" title="${t("export.qualityTip")}" ${busy ? "disabled" : ""}>${EXPORT_SCALES.map((n) => `<option value="${n}"${exportScale() === n ? " selected" : ""}>${t(`export.quality${n}`)}</option>`).join("")}</select>
           <button class="btn" data-tl="gif" ${anyKeys && !busy ? "" : "disabled"} title="${t("export.gifTip")}">${gifProgress !== null ? `${Math.round(gifProgress * 100)}%` : "GIF"}</button>
           <button class="btn" data-tl="video" ${anyKeys && (!busy || video) ? "" : "disabled"} title="${t("export.videoTip")}">${video ? t("export.recording") : t("export.video")}</button>
           <button class="btn" data-tl="csv" ${anyKeys && !busy ? "" : "disabled"} title="${t("export.csvTip")}">CSV</button>
@@ -590,6 +591,7 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
     if (what === "length" && n > 0) editTimeline((tl) => (tl.length = n));
     if (what === "mode") editTimeline((tl) => (tl.mode = input.value as Timeline["mode"]));
     if (what === "lead" && n >= 0) (p.leadIn = n), ed.emit();
+    if (what === "quality") setExportScale(n);
     const refs = p.keySel;
     if (what === "kseg" && refs.length && input.value) editTimeline((tl) => refs.forEach((r) => setSeg(tl.keys[r.driver][r.i], input.value as Seg)));
     if (refs.length === 1) {
