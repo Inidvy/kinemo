@@ -218,6 +218,103 @@ function clipOutside(ctx: CanvasRenderingContext2D, part: Part) {
   ctx.clip(path, "evenodd");
 }
 
+// ------------------------------------------------------------------ gears
+
+/** How a gear or rack is drawn, in its body's sketch frame. */
+interface Teeth {
+  /** Tooth size (module): teeth stick out this far past the pitch circle or line. */
+  m: number;
+  /** Gear: number of teeth and the angle of one tooth. Rack: distance along the line of one tooth. */
+  n: number;
+  phase: number;
+  /** Ring gear (teeth inward), or for a rack which side the teeth are on (+1 left of the line). */
+  internal?: boolean;
+  side?: number;
+}
+
+/** Teeth for every circle that meshes as a gear and every line that is a rack. */
+function teethFor(doc: SketchDoc, joints: Joint[]): Map<Id, Teeth> {
+  const out = new Map<Id, Teeth>();
+  const m0 = Math.max(0.5, doc.settings.barWidth * 0.25);
+  // The first mesh a gear is in sets where its teeth are; `toothAt` gets the
+  // angle between two teeth.
+  const gear = (gid: Id, r: number, toothAt: (tau: number) => number, internal = false) => {
+    if (out.has(gid)) return out.get(gid)!;
+    const n = Math.max(6, Math.round((2 * r) / m0));
+    const t: Teeth = { m: (2 * r) / n, n, phase: toothAt((Math.PI * 2) / n), internal };
+    out.set(gid, t);
+    return t;
+  };
+  for (const j of joints) {
+    if (j.kind === "gear") {
+      const [ra, rb, internal, , phi] = j.data!;
+      const [ga, gb] = j.refs;
+      if (!internal) {
+        // A tooth of one faces a gap of the other along the line of centres.
+        gear(ga, ra, () => phi);
+        gear(gb, rb, (tau) => phi + Math.PI + tau / 2);
+      } else {
+        const ringA = ra > rb;
+        const contact = ringA ? phi : phi + Math.PI;
+        gear(ringA ? ga : gb, ringA ? ra : rb, (tau) => contact + tau / 2, true);
+        gear(ringA ? gb : ga, ringA ? rb : ra, () => contact);
+      }
+    } else if (j.kind === "rack") {
+      const [r, side, s0] = j.data!;
+      const [lid, cid] = j.refs;
+      const l = doc.geoms[lid];
+      if (l?.kind !== "line") continue;
+      const u = sub(doc.points[l.p2], doc.points[l.p1]);
+      // The pinion's tooth points at the rack; the rack has a gap there.
+      const down = angleOf({ x: u.y * side, y: -u.x * side });
+      const pinion = gear(cid, r, () => down);
+      const pitch = Math.PI * pinion.m;
+      if (!out.has(lid)) out.set(lid, { m: pinion.m, n: pitch, phase: s0 + pitch / 2, side });
+    }
+  }
+  return out;
+}
+
+/** The outline of a gear or rack, grown by `grow` (sketch units), as polygons in sketch coordinates. */
+function teethPolys(doc: SketchDoc, g: Geometry, t: Teeth, grow: number, back: number): Vec[][] {
+  const pt = (c: Vec, a: number, r: number) => ({ x: c.x + Math.cos(a) * r, y: c.y + Math.sin(a) * r });
+  if (g.kind === "line") {
+    const a = doc.points[g.p1], b = doc.points[g.p2];
+    const len = dist(a, b) || 1;
+    const u = { x: (b.x - a.x) / len, y: (b.y - a.y) / len };
+    const nrm = { x: -u.y * t.side!, y: u.x * t.side! };
+    const at = (s: number, o: number) => ({ x: a.x + u.x * s + nrm.x * o, y: a.y + u.y * s + nrm.y * o });
+    const tip = t.m + grow, root = -1.25 * t.m + grow, base = -1.25 * t.m - back - grow;
+    const p = t.n;
+    const out: Vec[] = [at(-grow, base), at(-grow, root)];
+    let k = Math.ceil((0 - t.phase) / p - 0.5);
+    for (let s = t.phase + k * p; s - 0.3 * p < len; s = t.phase + ++k * p) {
+      for (const [ds, o] of [[-0.28, root], [-0.12, tip], [0.12, tip], [0.28, root]] as const) {
+        const x = s + ds * p;
+        if (x > 0 && x < len) out.push(at(x, o));
+      }
+    }
+    out.push(at(len + grow, root), at(len + grow, base));
+    return [out];
+  }
+  if (g.kind !== "circle" && g.kind !== "arc") return [];
+  const c = doc.points[g.c];
+  const r = g.kind === "circle" ? g.r : arcRadius(doc, g);
+  const tau = (Math.PI * 2) / t.n;
+  const ring: Vec[] = [];
+  const tip = t.internal ? r - t.m - grow : r + t.m + grow;
+  const root = t.internal ? r + 1.25 * t.m - grow : r - 1.25 * t.m + grow;
+  for (let i = 0; i < t.n; i++) {
+    const a = t.phase + i * tau;
+    ring.push(pt(c, a - 0.5 * tau, root), pt(c, a - 0.28 * tau, root), pt(c, a - 0.12 * tau, tip), pt(c, a + 0.12 * tau, tip), pt(c, a + 0.28 * tau, root));
+  }
+  if (!t.internal) return [ring];
+  // A ring gear: a band round the outside, teeth pointing in.
+  const outer: Vec[] = [];
+  for (let i = 0; i < 96; i++) outer.push(pt(c, (i / 96) * Math.PI * 2, r + 1.25 * t.m + back + grow));
+  return [outer, ring];
+}
+
 /**
  * Bodies as see-through shapes with a solid outline. All parts of a body are
  * filled together, so they merge into one shape instead of darkening where
@@ -230,6 +327,7 @@ export function drawBodies(ctx: CanvasRenderingContext2D, ed: Editor, style: Bar
   const hole = slotWidth(doc, v);
   const slots = slotGeoms(doc, ed.mech.joints);
   const ground = groundBodies(doc);
+  const teeth = teethFor(doc, ed.mech.joints);
 
   // Ground first so moving bodies sit on top of it.
   const bodies = Object.values(doc.bodies).sort((a, b) => Number(ground.has(b.id)) - Number(ground.has(a.id)));
@@ -243,9 +341,16 @@ export function drawBodies(ctx: CanvasRenderingContext2D, ed: Editor, style: Bar
     const slotted = geoms.filter((g) => slots.has(g.id));
     const loops = bodyLoops(doc, b).map((loop) => orient(loop.map((p) => v.toScreen(applyPose(pose, p)))));
     const loose = b.members.filter((id) => doc.points[id]).map((id) => v.toScreen(applyPose(pose, doc.points[id])));
+    const toScreen = (p: Vec) => v.toScreen(applyPose(pose, p));
     const parts = (width: number): Part[] => [
       ...loops.map((p) => [p]),
-      ...geoms.map((g) => geomPart(doc, v, pose, g, width)),
+      ...geoms.map((g) => {
+        const tt = teeth.get(g.id);
+        if (!tt) return geomPart(doc, v, pose, g, width);
+        // Gears and racks: their toothed outline (stroked for the outline ring).
+        const polys = teethPolys(doc, g, tt, 0, doc.settings.barWidth * 0.8);
+        return polys.map((p, i) => orient(p.map(toScreen), i === 1 ? -1 : 1));
+      }),
       ...loose.map((p) => disc(p, width / 2)),
     ];
     const union = (list: Part[]) => {
@@ -271,6 +376,14 @@ export function drawBodies(ctx: CanvasRenderingContext2D, ed: Editor, style: Bar
     ctx.save();
     for (const part of inner) clipOutside(ctx, part);
     ctx.fill(union(parts(w + 4)));
+    // Toothed edges are stroked: growing a tooth outline evenly is fiddly.
+    const toothed = geoms.filter((g) => teeth.has(g.id));
+    if (toothed.length) {
+      ctx.strokeStyle = edge;
+      ctx.lineWidth = 4;
+      ctx.lineJoin = "round";
+      ctx.stroke(union(toothed.map((g) => teethPolys(doc, g, teeth.get(g.id)!, 0, doc.settings.barWidth * 0.8).map((p) => p.map(toScreen)))));
+    }
     ctx.restore();
     // ...and around each slot.
     if (holes.length) {
@@ -307,6 +420,18 @@ export function drawJoints(ctx: CanvasRenderingContext2D, ed: Editor): void {
     const at = v.toScreen(jointKinds.get(j.kind).anchor(k, j));
     const fixed = j.kind === "anchor" || (j.kind === "pin" && (isGround(doc, j.a) || isGround(doc, j.b)));
     const sel = ed.selection.has(j.id), hov = ed.hover === j.id;
+    if (j.kind === "gear" || j.kind === "rack") {
+      // Where gears mesh: no pin, just a mark when it is picked or pointed at.
+      if (sel || hov) {
+        ctx.beginPath();
+        ctx.arc(at.x, at.y, r * 0.8, 0, Math.PI * 2);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = sel ? colors.selected : colors.hover;
+        ctx.stroke();
+      }
+      if (driven.has(j.id)) motorArrow(ctx, at, r + 6);
+      continue;
+    }
     ctx.beginPath();
     ctx.arc(at.x, at.y, r, 0, Math.PI * 2);
     ctx.fillStyle = fixed ? colors.groundPin : colors.pin;
@@ -411,11 +536,12 @@ export function motionHit(ed: Editor, s: Vec): { kind: "joint"; id: Id } | { kin
   }
   const half = Math.max(6, (doc.settings.barWidth * v.zoom) / 2 + 2);
   const bodies = Object.values(doc.bodies).sort((a, b) => Number(isGround(doc, a.id)) - Number(isGround(doc, b.id)));
-  for (const b of bodies) if (bodyDistance(doc, v, b, s) <= half) return { kind: "body", id: b.id };
+  const discs = new Set(m.joints.flatMap((j) => (j.kind === "gear" ? j.refs.slice(0, 2) : j.kind === "rack" ? [j.refs[1]] : [])));
+  for (const b of bodies) if (bodyDistance(doc, v, b, s, discs) <= half) return { kind: "body", id: b.id };
   return null;
 }
 
-function bodyDistance(doc: SketchDoc, v: View, b: Body, s: Vec): number {
+function bodyDistance(doc: SketchDoc, v: View, b: Body, s: Vec, discs: Set<Id>): number {
   const pose = poseOf(doc, b.id);
   const P = (id: Id) => v.toScreen(applyPose(pose, doc.points[id]));
   // Inside a plate counts as on it.
@@ -439,7 +565,8 @@ function bodyDistance(doc: SketchDoc, v: View, b: Body, s: Vec): number {
     else {
       const c = P(g.c);
       const rr = (g.kind === "circle" ? g.r : arcRadius(doc, g)) * v.zoom;
-      let d = Math.abs(dist(c, s) - rr);
+      // A gear is a solid disc.
+      let d = discs.has(g.id) ? Math.max(0, dist(c, s) - rr) : Math.abs(dist(c, s) - rr);
       if (g.kind === "arc") {
         const a = angleOf({ x: s.x - c.x, y: c.y - s.y }) - pose.a;
         const a0 = angleOf(sub(doc.points[g.s], doc.points[g.c])), a1 = angleOf(sub(doc.points[g.e], doc.points[g.c]));

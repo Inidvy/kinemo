@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { addConstraint, addGeom, addPoint, emptyDoc, type Arc, type Id, type Line, type SketchDoc } from "../src/core/model";
+import { addConstraint, addGeom, addPoint, emptyDoc, type Arc, type Circle, type Id, type Line, type SketchDoc } from "../src/core/model";
 import { Mechanism } from "../src/motion/kinematics";
 import { applyPose } from "../src/motion/bodies";
 import { jointKinds } from "../src/motion/joints";
@@ -204,6 +204,68 @@ describe("tracks", () => {
     body(doc, "rail", [a.id], true);
     body(doc, "block", [block.id]);
     expect(new Mechanism(doc).joints[0].kind).toBe("slot");
+  });
+});
+
+describe("gears", () => {
+  function circle(doc: SketchDoc, x: number, y: number, r: number) {
+    const c = addPoint(doc, x, y);
+    return { id: addGeom<Circle>(doc, { kind: "circle", c, r }), c };
+  }
+
+  it("turns a meshed gear the other way by the ratio of their sizes", () => {
+    const doc = emptyDoc();
+    const ground = bar(doc, 0, 0, 30, 0);
+    const small = circle(doc, 0, 0, 10), big = circle(doc, 30, 0, 20);
+    const pin = addConstraint(doc, { type: "coincident", refs: [ground.p1, small.c] });
+    addConstraint(doc, { type: "coincident", refs: [ground.p2, big.c] });
+    const mesh = addConstraint(doc, { type: "tangent", refs: [small.id, big.id] });
+    body(doc, "ground", [ground.id], true);
+    body(doc, "small", [small.id]);
+    body(doc, "big", [big.id]);
+    const m = new Mechanism(doc);
+    expect(m.joint(mesh)!.kind).toBe("gear");
+    expect(m.dof()).toBe(1);
+    const r = m.driveTo(pin, 90);
+    expect(r.reached).toBe(true);
+    expect(m.pose(r.q, "big").a).toBeCloseTo(-Math.PI / 4, 5);
+  });
+
+  it("turns a gear inside a ring gear the same way", () => {
+    const doc = emptyDoc();
+    const ground = bar(doc, 0, 0, 10, 0);
+    const ring = circle(doc, 0, 0, 30), small = circle(doc, 20, 0, 10);
+    const pin = addConstraint(doc, { type: "coincident", refs: [ground.p1, ring.c] });
+    addConstraint(doc, { type: "coincident", refs: [ground.p2, small.c] });
+    // Ground point at (10,0) is moved onto the small gear's centre by the sketch; here put it there.
+    doc.points[ground.p2] = { ...doc.points[ground.p2], x: 20 };
+    addConstraint(doc, { type: "tangent", refs: [ring.id, small.id] });
+    body(doc, "ground", [ground.id], true);
+    body(doc, "ring", [ring.id]);
+    body(doc, "small", [small.id]);
+    const m = new Mechanism(doc);
+    expect(m.joints.map((j) => j.kind)).toContain("gear");
+    const r = m.driveTo(pin, 30);
+    expect(r.reached).toBe(true);
+    expect(m.pose(r.q, "small").a).toBeCloseTo((Math.PI / 6) * 3, 5);
+  });
+
+  it("rolls a pinion along a rack", () => {
+    const doc = emptyDoc();
+    const rack = bar(doc, 0, 0, 100, 0);
+    const pinion = circle(doc, 20, 10, 10);
+    const mesh = addConstraint(doc, { type: "tangent", refs: [rack.id, pinion.id] });
+    body(doc, "rack", [rack.id], true);
+    body(doc, "pinion", [pinion.id]);
+    const m = new Mechanism(doc);
+    expect(m.joint(mesh)!.kind).toBe("rack");
+    expect(m.dof()).toBe(1);
+    const r = m.driveTo(mesh, 20 + Math.PI * 10);
+    expect(r.reached).toBe(true);
+    // Half a circumference to the right is half a turn clockwise.
+    const p = m.pose(r.q, "pinion");
+    expect(p.a).toBeCloseTo(-Math.PI, 4);
+    expect(applyPose(p, doc.points[pinion.c]).y).toBeCloseTo(10, 6);
   });
 });
 

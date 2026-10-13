@@ -1,5 +1,5 @@
 import { Registry } from "../core/registry";
-import type { Constraint, Id, SketchDoc, Vec } from "../core/model";
+import { arcRadius, type Constraint, type Id, type SketchDoc, type Vec } from "../core/model";
 import { isGround } from "./bodies";
 import { angleInSweep, angleOf, cross, dist, dot, sub } from "../core/geom";
 
@@ -513,3 +513,129 @@ export function deriveJoints(doc: SketchDoc, owner: Map<Id, Id>): Joint[] {
   }
   return out;
 }
+
+// ------------------------------------------------------------------ gears
+
+/** Radius of a circle or arc, or 0 for anything else. */
+function curveRadius(doc: SketchDoc, gid: Id): number {
+  const g = doc.geoms[gid];
+  if (g?.kind === "circle") return g.r;
+  if (g?.kind === "arc") return arcRadius(doc, g);
+  return 0;
+}
+
+/**
+ * Gear pair: two circles (or arcs) of different bodies made tangent mesh as
+ * gears. They roll on each other without slipping, so turning one turns the
+ * other the other way, slower by the ratio of their sizes. A circle inside
+ * another is an internal (ring) gear and turns the same way.
+ *
+ * refs: [circle a, circle b, centre a, centre b]; data: [ra, rb, internal, rolling constant].
+ */
+jointKinds.register({
+  id: "gear",
+  label: "joint.gear",
+  unit: "deg",
+  fromConstraint(doc, c, owner) {
+    if (c.type !== "tangent" || c.refs.length !== 2) return null;
+    const [g1, g2] = c.refs;
+    const ra = curveRadius(doc, g1), rb = curveRadius(doc, g2);
+    if (!ra || !rb) return null;
+    const a = owner.get(g1), b = owner.get(g2);
+    if (!a || !b || a === b) return null;
+    const ca = (doc.geoms[g1] as { c: Id }).c, cb = (doc.geoms[g2] as { c: Id }).c;
+    const d = dist(doc.points[ca], doc.points[cb]);
+    const internal = Math.abs(d - Math.abs(ra - rb)) < Math.abs(d - (ra + rb)) ? 1 : 0;
+    const phi = angleOf(sub(doc.points[cb], doc.points[ca]));
+    // Bodies start at angle 0, as sketched.
+    const roll = internal ? -ra * phi + rb * phi : -(ra + rb) * phi;
+    return { id: c.id, kind: "gear", a, b, refs: [g1, g2, ca, cb], data: [ra, rb, internal, roll, phi] };
+  },
+  equations(k, j) {
+    const [ra, rb, internal, roll, phi0] = j.data!;
+    const ca = k.w(j.refs[2]), cb = k.w(j.refs[3]);
+    // The line of centres, kept continuous from how it was sketched.
+    const phi = phi0 + wrapPi(angleOf(sub(cb, ca)) - phi0);
+    const ta = k.angle(j.a), tb = k.angle(j.b);
+    return internal
+      ? [dist(ca, cb) - Math.abs(ra - rb), ra * (ta - phi) - rb * (tb - phi) - roll]
+      : [dist(ca, cb) - (ra + rb), ra * (ta - phi) + rb * (tb - phi) - roll];
+  },
+  measure: (k, j) => wrapPi(k.angle(j.b) - k.angle(j.a)) * DEG,
+  drive(k, j, value) {
+    return wrapPi((this.measure(k, j) - value) / DEG);
+  },
+  range: () => [-180, 180],
+  wraps: () => true,
+  anchor(k, j) {
+    const [ra, rb, internal] = j.data!;
+    const ca = k.w(j.refs[2]), cb = k.w(j.refs[3]);
+    const d = dist(ca, cb) || 1;
+    // The contact point, on the line of centres. Inside a ring gear it is on
+    // the far side of the small gear from the ring's centre.
+    const r = internal && rb > ra ? -ra : ra;
+    return { x: ca.x + ((cb.x - ca.x) / d) * r, y: ca.y + ((cb.y - ca.y) / d) * r };
+  },
+});
+
+/**
+ * Rack and pinion: a line of one body tangent to a circle of another. The
+ * circle rolls along the line without slipping.
+ *
+ * refs: [line, circle, l1, l2, centre]; data: [r, side, rolling constant].
+ */
+jointKinds.register({
+  id: "rack",
+  label: "joint.rack",
+  unit: "mm",
+  fromConstraint(doc, c, owner) {
+    if (c.type !== "tangent" || c.refs.length !== 2) return null;
+    const [lid, cid] = c.refs;
+    const l = doc.geoms[lid];
+    const r = curveRadius(doc, cid);
+    if (l?.kind !== "line" || !r) return null;
+    const a = owner.get(lid), b = owner.get(cid);
+    if (!a || !b || a === b) return null;
+    const centre = (doc.geoms[cid] as { c: Id }).c;
+    const l1 = doc.points[l.p1], l2 = doc.points[l.p2], p = doc.points[centre];
+    const u = sub(l2, l1);
+    const len = Math.hypot(u.x, u.y) || 1;
+    const side = cross(u, sub(p, l1)) >= 0 ? 1 : -1;
+    const s = dot(sub(p, l1), u) / len;
+    return { id: c.id, kind: "rack", a, b, refs: [lid, cid, l.p1, l.p2, centre], data: [r, side, s] };
+  },
+  equations(k, j) {
+    const [r, side, s0] = j.data!;
+    const l1 = k.w(j.refs[2]), l2 = k.w(j.refs[3]), p = k.w(j.refs[4]);
+    const u = sub(l2, l1);
+    const len = Math.hypot(u.x, u.y) || 1;
+    const off = cross(u, sub(p, l1)) / len;
+    const s = dot(sub(p, l1), u) / len;
+    // Rolling: the centre moves along the rack as far as the rim turns.
+    return [off - side * r, s - s0 + side * r * (k.angle(j.b) - k.angle(j.a))];
+  },
+  measure(k, j) {
+    const l1 = k.w(j.refs[2]), l2 = k.w(j.refs[3]), p = k.w(j.refs[4]);
+    const u = sub(l2, l1);
+    return dot(sub(p, l1), u) / (Math.hypot(u.x, u.y) || 1);
+  },
+  drive(k, j, value) {
+    return this.measure(k, j) - value;
+  },
+  range: (doc, j) => [0, dist(doc.points[j.refs[2]], doc.points[j.refs[3]])],
+  overLimit(k, j) {
+    const s = this.measure(k, j);
+    const hi = dist(k.doc.points[j.refs[2]], k.doc.points[j.refs[3]]);
+    if (s < 0) return s;
+    if (s > hi) return s - hi;
+    return null;
+  },
+  anchor(k, j) {
+    const [r, side] = j.data!;
+    const l1 = k.w(j.refs[2]), l2 = k.w(j.refs[3]), p = k.w(j.refs[4]);
+    const u = sub(l2, l1);
+    const len = Math.hypot(u.x, u.y) || 1;
+    // From the centre straight to the rack.
+    return { x: p.x + (u.y / len) * side * r, y: p.y - (u.x / len) * side * r };
+  },
+});

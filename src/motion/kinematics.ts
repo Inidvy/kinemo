@@ -97,8 +97,19 @@ export class Mechanism {
   dof(q: number[] = this.current()): number {
     if (!this.moving.length) return 0;
     const f = (x: number[]) => this.equations(x, [], []);
-    const J = jacobian(f, q);
-    return q.length - (J.length ? rank(J, 1e-7) : 0);
+    // Central differences: accurate enough that joints which repeat each
+    // other (a gear pair on two fixed pins) don't count twice.
+    const f0 = f(q);
+    const J = f0.map(() => new Array<number>(q.length).fill(0));
+    const h = 1e-5;
+    for (let c = 0; c < q.length; c++) {
+      const up = [...q], down = [...q];
+      up[c] += h;
+      down[c] -= h;
+      const a = f(up), b = f(down);
+      for (let i = 0; i < f0.length; i++) J[i][c] = (a[i] - b[i]) / (2 * h);
+    }
+    return q.length - (J.length ? rank(J, 1e-6) : 0);
   }
 
   private equations(q: number[], extra: ((k: JointContext) => number)[], drive: { joint: Id; value: number }[]): number[] {

@@ -56,6 +56,8 @@ export const en: Record<string, string> = {
   "joint.anchor": "Fixed pivot",
   "joint.slot": "Slider",
   "joint.track": "Track",
+  "joint.gear": "Gear",
+  "joint.rack": "Rack",
   "joint.curveSlot": "Curved slider",
 
   "hint.move": "Drag a bar or joint to move the mechanism; a slider joint runs along its slot. Click a body or joint to select it. D adds a slider.",
