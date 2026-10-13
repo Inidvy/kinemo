@@ -1,0 +1,52 @@
+import wasmUrl from "@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url";
+import "./style.css";
+import { Editor } from "./app/editor";
+import { Solver } from "./solver/solver";
+import { autosave, loadAutosave } from "./io/file";
+import { mountCanvas } from "./ui/canvas";
+import { mountToolbar } from "./ui/toolbar";
+import { mountKeys } from "./ui/keys";
+import { mountFeatureTree, mountProperties } from "./ui/panels";
+import { mountDimEditor } from "./ui/dimEditor";
+import { tools } from "./tools";
+import { t } from "./i18n";
+
+async function main() {
+  const solver = await Solver.create(wasmUrl);
+  const ed = new Editor(solver, loadAutosave() ?? undefined);
+
+  const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
+  $("#brand").textContent = t("app.name");
+  $("#doc-name").textContent = t("doc.untitled");
+
+  const canvas = $<HTMLCanvasElement>("#canvas");
+  mountCanvas(canvas, ed);
+  mountToolbar($("#toolbar"), ed);
+  mountFeatureTree($("#left"), ed);
+  mountProperties($("#right"), ed);
+  mountDimEditor($("#canvas-wrap"), ed);
+  mountKeys(ed);
+
+  // Bottom tabs, like Onshape's Part Studio / Assembly tabs.
+  const tabs = $("#tabs");
+  tabs.innerHTML = `
+    <button class="tab on" data-mode="sketch">✎ ${t("tab.sketch")}</button>
+    <button class="tab" data-mode="motion" disabled title="${t("tab.motionSoon")}">⟳ ${t("tab.motion")}</button>`;
+
+  const status = $("#status");
+  let saveTimer = 0;
+  ed.subscribe(() => {
+    status.textContent = ed.message || t(tools.find(ed.tool)?.hint ?? "");
+    status.classList.toggle("flash", !!ed.message);
+    clearTimeout(saveTimer);
+    saveTimer = window.setTimeout(() => autosave(ed.doc), 400);
+  });
+
+  requestAnimationFrame(() => {
+    ed.view.fit(Object.values(ed.doc.points), canvas.clientWidth, canvas.clientHeight);
+    ed.emit();
+  });
+  (window as unknown as { kinemo: Editor }).kinemo = ed;
+}
+
+main();
