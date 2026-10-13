@@ -109,3 +109,36 @@ export function keysFromRecording(ts: number[], vs: number[]): Keyframe[] {
   const idx = simplify(times, smooth, Math.max(span * 0.01, 1e-6));
   return idx.map((i) => ({ t: Math.round(times[i] * 1000) / 1000, v: smooth[i], smooth: true }));
 }
+
+/** A key on the timeline: its slider and its index in that slider's keys. */
+export type KeyRef = { driver: Id; i: number };
+
+/** Remove keys, and drop any slider left without keys. */
+export function deleteKeys(tl: Timeline, refs: KeyRef[]): void {
+  for (const driver of new Set(refs.map((r) => r.driver))) {
+    const keys = tl.keys[driver];
+    if (!keys) continue;
+    const gone = new Set(refs.filter((r) => r.driver === driver).map((r) => r.i));
+    tl.keys[driver] = keys.filter((_, i) => !gone.has(i));
+    if (!tl.keys[driver].length) delete tl.keys[driver];
+  }
+}
+
+/**
+ * Move keys together by dt seconds, kept within the clip. A key left at the
+ * same time as a moved one gives way to it. Returns where the moved keys are now.
+ */
+export function shiftKeys(tl: Timeline, refs: KeyRef[], dt: number): KeyRef[] {
+  const moved = refs.flatMap((r) => (tl.keys[r.driver]?.[r.i] ? [{ driver: r.driver, k: tl.keys[r.driver][r.i] }] : []));
+  if (!moved.length) return [];
+  const lo = Math.min(...moved.map((m) => m.k.t)), hi = Math.max(...moved.map((m) => m.k.t));
+  const d = Math.min(Math.max(dt, -lo), Math.max(0, tl.length - hi));
+  for (const m of moved) m.k.t = Math.round((m.k.t + d) * 1000) / 1000;
+  const mine = new Set(moved.map((m) => m.k));
+  for (const driver of new Set(moved.map((m) => m.driver))) {
+    const keys = tl.keys[driver];
+    const at = keys.filter((k) => mine.has(k)).map((k) => k.t);
+    tl.keys[driver] = keys.filter((k) => mine.has(k) || !at.some((t) => Math.abs(t - k.t) < 1e-6)).sort((a, b) => a.t - b.t);
+  }
+  return moved.map((m) => ({ driver: m.driver, i: tl.keys[m.driver].indexOf(m.k) }));
+}

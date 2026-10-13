@@ -114,6 +114,8 @@ const builtins: Action[] = [
     shortcut: "delete",
     group: "edit",
     run(ed) {
+      // Selected keys on the timeline go first.
+      if (ed.mode === "motion" && ed.animation && timelinePlayer()?.deleteSelectedKeys()) return;
       const ids = [...ed.selection];
       if (!ids.length) return;
       if (ed.mode === "motion") {
