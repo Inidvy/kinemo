@@ -11,20 +11,32 @@ import { jointKinds } from "../motion/joints";
 export class SliderMotion {
   private targets = new Map<Id, number>();
   private holds = new Map<Id, number>();
+  /** For targets that count turns: where the slider is, counting turns, and its last reading. */
+  private turns = new Map<Id, { raw: number; last: number }>();
   private frame = 0;
   private last = 0;
 
   constructor(private ed: Editor) {}
 
-  /** Ease a slider towards a value. */
-  setTarget(driver: Id, value: number): void {
+  /**
+   * Ease a slider towards a value. With `turns`, the value counts on past a
+   * full turn (370° is one turn and 10° more) instead of taking the short way.
+   */
+  setTarget(driver: Id, value: number, turns = false): void {
     this.targets.set(driver, value);
+    if (!turns) this.turns.delete(driver);
+    else if (!this.turns.has(driver)) {
+      const d = this.ed.doc.motion.drivers[driver];
+      const m = d ? this.ed.mech.measure(this.ed.mech.current(), d.joint) : 0;
+      this.turns.set(driver, { raw: m, last: m });
+    }
     this.start();
   }
 
   /** Keep a slider moving down (-1) or up (+1) until released. */
   hold(driver: Id, dir: number): void {
     this.targets.delete(driver);
+    this.turns.delete(driver);
     this.holds.set(driver, dir);
     this.start();
   }
@@ -32,6 +44,11 @@ export class SliderMotion {
   release(driver?: Id): void {
     if (driver) this.holds.delete(driver);
     else this.holds.clear();
+  }
+
+  /** Start counting turns afresh for a slider. */
+  resetTurns(driver: Id): void {
+    this.turns.delete(driver);
   }
 
   get active(): boolean {
@@ -45,11 +62,13 @@ export class SliderMotion {
     this.frame = requestAnimationFrame((t) => this.tick(t));
   }
 
-  private unit(driver: Id): { deg: boolean; size: number } | null {
+  private unit(driver: Id): { deg: boolean; size: number; period: number } | null {
     const d = this.ed.doc.motion.drivers[driver];
     const j = d && this.ed.mech.joint(d.joint);
     if (!j) return null;
-    return { deg: jointKinds.get(j.kind).unit === "deg", size: this.ed.mech.size };
+    const kind = jointKinds.get(j.kind);
+    const [lo, hi] = kind.range(this.ed.doc, j);
+    return { deg: kind.unit === "deg", size: this.ed.mech.size, period: kind.wraps?.(j) ? hi - lo : 0 };
   }
 
   private tick(now: number) {
@@ -75,8 +94,15 @@ export class SliderMotion {
         continue;
       }
       const cur = ed.mech.measure(ed.mech.current(), d.joint);
-      let delta = target - cur;
-      if (u.deg) delta = ((((delta + 180) % 360) + 360) % 360) - 180;
+      const wrap = (x: number) => (u.period ? ((((x + u.period / 2) % u.period) + u.period) % u.period) - u.period / 2 : x);
+      const tr = this.turns.get(id);
+      let delta: number;
+      if (tr) {
+        // Count whole turns, so a fast drag never turns back the short way.
+        tr.raw += wrap(cur - tr.last);
+        tr.last = cur;
+        delta = target - tr.raw;
+      } else delta = wrap(target - cur);
       const maxStep = (u.deg ? 360 : u.size * 2) * dt;
       const step = Math.max(-maxStep, Math.min(maxStep, delta * Math.min(1, dt * 14)));
       if (Math.abs(delta) < (u.deg ? 0.01 : u.size * 1e-5)) {

@@ -236,10 +236,16 @@ export class Mechanism {
     let q = this.current();
     const j = this.joint(jointId);
     if (!j) return { q, reached: false };
-    const unit = jointKinds.get(j.kind).unit;
+    const kind = jointKinds.get(j.kind);
+    const unit = kind.unit;
     const from = this.measure(q, jointId);
     let delta = value - from;
-    if (unit === "deg") delta = ((((delta + 180) % 360) + 360) % 360) - 180;
+    // A joint that goes round takes the short way there.
+    if (kind.wraps?.(j)) {
+      const [lo, hi] = kind.range(this.doc, j);
+      const p = hi - lo;
+      delta = ((((delta + p / 2) % p) + p) % p) - p / 2;
+    }
     const maxStep = unit === "deg" ? 4 : this.size / 40;
     const steps = Math.max(1, Math.ceil(Math.abs(delta) / maxStep));
     const others = hold.filter((id) => id !== jointId).map((id) => ({ joint: id, value: this.measure(q, id) }));

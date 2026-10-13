@@ -48,6 +48,8 @@ export interface JointKind {
   drive(k: JointContext, j: Joint, value: number): number;
   /** Slider range, if the joint has one. */
   range(doc: SketchDoc, j: Joint): [number, number];
+  /** True when the joint goes round and round, so its range wraps (a full turn, a closed track). */
+  wraps?(j: Joint): boolean;
   /** Where the joint is drawn. */
   anchor(k: JointContext, j: Joint): Vec;
 }
@@ -118,6 +120,7 @@ jointKinds.register({
     return wrapPi((this.measure(k, j) - value) / DEG);
   },
   range: () => [-180, 180],
+  wraps: () => true,
   anchor: (k, j) => k.w(j.refs[0]),
 });
 
@@ -154,6 +157,7 @@ jointKinds.register({
     return wrapPi((this.measure(k, j) - value) / DEG);
   },
   range: () => [-180, 180],
+  wraps: () => true,
   anchor: (k, j) => k.w(j.refs[0]),
 });
 
@@ -340,6 +344,7 @@ jointKinds.register({
     const { s, total } = locate(k, j);
     return j.data![0] > 0 ? ((s % total) + total) % total : s;
   },
+  wraps: (j) => j.data![0] > 0,
   drive(k, j, value) {
     const { s, total } = locate(k, j);
     const d = s - value;
@@ -437,6 +442,7 @@ jointKinds.register({
   drive(k, j, value) {
     return wrapPi((this.measure(k, j) - value) / DEG) * radius(k.doc, j);
   },
+  wraps: (j) => j.refs.length < 5,
   range(doc, j) {
     if (j.refs.length < 5) return [-180, 180];
     const s = sketchAngle(doc, j, 3), e = sketchAngle(doc, j, 4);

@@ -94,7 +94,7 @@ function sliderRow(ed: Editor, d: Driver): string {
       <div class="slider-head"><span>${esc(driverName(ed, d))}</span><button class="icon-btn" data-remove-driver="${d.id}" title="${t("panel.delete")}">${icons.delete}</button></div>
       <div class="slider-body">
         <button class="hold" data-hold="${d.id}" data-dir="-1" title="${t("slider.hold")}">◀</button>
-        <input type="range" min="${lo}" max="${hi}" step="${step}" value="${v}" data-drive="${d.id}">
+        <input type="range" min="${lo}" max="${hi}" step="${step}" value="${v}" data-drive="${d.id}"${kind.wraps?.(j) ? ` data-wrap="1"` : ""}>
         <button class="hold" data-hold="${d.id}" data-dir="1" title="${t("slider.hold")}">▶</button>
       </div>
       <div class="slider-foot">
@@ -160,6 +160,45 @@ export function wireMotionPanel(el: HTMLElement, ed: Editor, sliders: SliderMoti
       ed.emit();
     }
   });
+  // A slider for a joint that goes round (a crank, a closed track) doesn't
+  // stop at its ends: dragging past max carries on from min, and holding the
+  // pointer beyond either end of the bar keeps it turning.
+  let spin: { driver: Id; left: number; width: number; period: number; base: number; x0: number; out: number } | null = null;
+  el.addEventListener("pointerdown", (e) => {
+    const input = (e.target as HTMLElement).closest<HTMLInputElement>("input[data-wrap]");
+    if (!input) return;
+    e.preventDefault();
+    input.setPointerCapture(e.pointerId);
+    const r = input.getBoundingClientRect();
+    const lo = Number(input.min), period = Number(input.max) - lo;
+    const base = lo + (Math.min(r.right, Math.max(r.left, e.clientX)) - r.left) / (r.width || 1) * period;
+    spin = { driver: input.dataset.drive!, left: r.left, width: r.width || 1, period, base, x0: e.clientX, out: 0 };
+    sliders.resetTurns(spin.driver);
+    sliders.setTarget(spin.driver, base, true);
+  });
+  el.addEventListener("pointermove", (e) => {
+    if (!spin) return;
+    const out = e.clientX > spin.left + spin.width ? 1 : e.clientX < spin.left ? -1 : 0;
+    if (out !== spin.out) {
+      spin.out = out;
+      if (out) sliders.hold(spin.driver, out);
+      else {
+        // Back on the bar: carry on from where the mechanism is now.
+        sliders.release(spin.driver);
+        const d = ed.doc.motion.drivers[spin.driver];
+        if (d) spin.base = ed.mech.measure(ed.mech.current(), d.joint);
+        spin.x0 = e.clientX;
+      }
+    }
+    if (!out) sliders.setTarget(spin.driver, spin.base + ((e.clientX - spin.x0) / spin.width) * spin.period, true);
+  });
+  const endSpin = () => {
+    if (spin) sliders.release(spin.driver);
+    spin = null;
+  };
+  el.addEventListener("pointerup", endSpin);
+  el.addEventListener("pointercancel", endSpin);
+
   // Press and hold ◀ ▶ to keep the slider moving.
   el.addEventListener("pointerdown", (e) => {
     const b = (e.target as HTMLElement).closest<HTMLElement>("[data-hold]");
