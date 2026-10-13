@@ -281,6 +281,7 @@ export const pointTool: Tool = {
   id: "point",
   label: "tool.point",
   icon: icons.point,
+  shortcut: "o",
   hint: "hint.point",
   snaps: true,
   down(ed, e) {

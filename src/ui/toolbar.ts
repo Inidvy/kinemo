@@ -9,10 +9,15 @@ function keyLabel(k?: string, ctrl?: boolean, shift?: boolean): string {
   return ` (${ctrl ? "Ctrl+" : ""}${shift ? "Shift+" : ""}${name})`;
 }
 
-function button(icon: string, title: string, onClick: () => void): HTMLButtonElement {
+function keyBadge(k?: string, ctrl?: boolean, shift?: boolean): string {
+  if (!k || k.length > 1) return "";
+  return `<kbd>${ctrl ? "^" : ""}${shift ? "⇧" : ""}${k.toUpperCase()}</kbd>`;
+}
+
+function button(icon: string, title: string, onClick: () => void, badge = ""): HTMLButtonElement {
   const b = document.createElement("button");
   b.className = "tb";
-  b.innerHTML = icon;
+  b.innerHTML = icon + badge;
   b.title = title;
   b.addEventListener("click", onClick);
   return b;
@@ -47,14 +52,15 @@ export function mountToolbar(el: HTMLElement, ed: Editor): void {
   const viewG = groupEl("view");
 
   for (const tool of tools.all()) {
-    const b = button(tool.icon, t(tool.label) + keyLabel(tool.shortcut, false, tool.shift), () => setTool(ed, tool.id));
+    if (tool.hidden) continue;
+    const b = button(tool.icon, t(tool.label) + keyLabel(tool.shortcut, false, tool.shift), () => setTool(ed, tool.id), keyBadge(tool.shortcut, false, tool.shift));
     toolButtons.set(tool.id, b);
     toolsG.appendChild(b);
   }
   const groups: Record<string, HTMLElement> = { file: fileG, edit: editG, constraint: consG, view: viewG };
   for (const a of actions.all()) {
     if (!a.group) continue;
-    const b = button(a.icon, t(a.label) + keyLabel(a.shortcut, a.ctrl, a.shift), () => a.run(ed));
+    const b = button(a.icon, t(a.label) + keyLabel(a.shortcut, a.ctrl, a.shift), () => a.run(ed), keyBadge(a.shortcut, a.ctrl, a.shift));
     groups[a.group].appendChild(b);
     if (a.active) toggles.push([a, b]);
   }

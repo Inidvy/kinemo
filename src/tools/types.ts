@@ -36,6 +36,10 @@ export interface Tool {
   shift?: boolean;
   /** i18n key for the status-bar hint. */
   hint: string;
+  /** Status-bar text that depends on state; overrides `hint`. */
+  hintText?(ed: Editor): string;
+  /** Not shown on the toolbar (entered some other way). */
+  hidden?: boolean;
   /** Snap to existing points and curves while this tool is active. */
   snaps?: boolean;
   activate?(ed: Editor): void;

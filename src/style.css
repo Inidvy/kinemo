@@ -107,6 +107,21 @@ body {
   flex: none;
 }
 
+.tb {
+  position: relative;
+}
+
+.tb kbd {
+  position: absolute;
+  right: 1px;
+  bottom: 0;
+  font-family: inherit;
+  font-size: 8px;
+  line-height: 1;
+  color: #8a93a3;
+  pointer-events: none;
+}
+
 .tb:hover {
   background: #eef1f5;
 }

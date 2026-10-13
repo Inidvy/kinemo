@@ -1,5 +1,5 @@
 import { addConstraint, addGeom, addPoint, type Arc, type Id, type Line, type SketchDoc, type Vec } from "../core/model";
-import { angleOf, dist, norm, perp, scale, sub } from "../core/geom";
+import { add, angleOf, dist, dot, norm, perp, scale, sub } from "../core/geom";
 import { icons } from "../ui/icons";
 import { t } from "../i18n";
 import { inferAxis, placePoint } from "./build";
@@ -10,11 +10,12 @@ import { makeTangent } from "../constraints/defs/relations";
 
 /**
  * FreeCAD-style polyline: a chain of segments where each new segment can be a
- * straight line, an arc tangent to the previous segment, or an arc that
- * starts at a right angle to it. M cycles the mode.
+ * straight line, an arc tangent to the previous segment, an arc that starts
+ * at a right angle to it, or a line that carries on tangent to it. M cycles
+ * the mode; arc → line goes through the tangent line first.
  */
-type Mode = "line" | "tangentArc" | "normalArc";
-const MODES: Mode[] = ["line", "tangentArc", "normalArc"];
+type Mode = "line" | "tangentArc" | "normalArc" | "tangentLine";
+const MODES: Mode[] = ["line", "tangentArc", "normalArc", "tangentLine"];
 
 interface Chain {
   start: Snap;
@@ -62,7 +63,12 @@ function continueFrom(doc: SketchDoc, snap: Snap): { tangent: Vec; geom: Id } | 
 }
 
 function preview(from: Chain, to: Vec): { arc: ArcThrough | null; line: Vec } {
-  if (mode === "line" || !from.tangent) return { arc: null, line: inferAxis(from.start.at, to).at };
+  if (mode === "tangentLine" && from.tangent) {
+    // Slide the end point along the previous segment's direction.
+    const along = Math.max(0, dot(sub(to, from.start.at), from.tangent));
+    return { arc: null, line: add(from.start.at, scale(from.tangent, along)) };
+  }
+  if (mode === "line" || mode === "tangentLine" || !from.tangent) return { arc: null, line: inferAxis(from.start.at, to).at };
   const arc = mode === "tangentArc" ? arcFromTangent(from.start.at, from.tangent, to) : arcFromNormal(from.start.at, from.tangent, to);
   return { arc, line: to };
 }
@@ -100,8 +106,9 @@ export const lineTool: Tool = {
     }
     const from = chain;
     if (dist(from.start.at, e.snap.at) < ed.view.px(3)) return;
-    const { arc } = preview(from, e.snap.at);
-    const useArc = arc && mode !== "line";
+    const { arc, line: lineEnd } = preview(from, e.snap.at);
+    const useArc = arc && (mode === "tangentArc" || mode === "normalArc");
+    const tangentLine = mode === "tangentLine" && !!from.tangent && !!from.prev;
 
     let endId: Id = "";
     let newGeom: Id = "";
@@ -128,6 +135,19 @@ export const lineTool: Tool = {
         endId = q;
       });
       nextTangent = arc.endTangent;
+    } else if (tangentLine) {
+      if (dist(from.start.at, lineEnd) < ed.view.px(3)) return;
+      const prevId = from.prev!;
+      ed.change((doc) => {
+        const p1 = placePoint(doc, from.start);
+        const p2 = addPoint(doc, lineEnd.x, lineEnd.y);
+        newGeom = addGeom<Line>(doc, { kind: "line", p1, p2 });
+        const prev = doc.geoms[prevId];
+        if (prev.kind === "line") addConstraint(doc, { type: "parallel", refs: [prev.id, newGeom] });
+        else addConstraint(doc, makeTangent(doc, prev, doc.geoms[newGeom]));
+        endId = p2;
+      });
+      nextTangent = from.tangent;
     } else {
       const inf = e.snap.kind === "none" ? inferAxis(from.start.at, e.snap.at) : { axis: null, at: e.snap.at };
       const end: Snap = e.snap.kind === "none" ? { kind: "none", at: inf.at } : e.snap;
@@ -150,7 +170,7 @@ export const lineTool: Tool = {
     previewStyle(ctx);
     const { arc, line } = preview(chain, cursor);
     let label: string;
-    if (mode !== "line" && chain.tangent && arc) {
+    if ((mode === "tangentArc" || mode === "normalArc") && chain.tangent && arc) {
       const c = v.toScreen(arc.center);
       const s = chain.start.at;
       const a0 = angleOf(sub(s, arc.center));
@@ -161,7 +181,7 @@ export const lineTool: Tool = {
       label = `R${Math.abs(arc.r).toFixed(1)}`;
     } else {
       strokeLine(ctx, v, chain.start.at, line);
-      const inf = inferAxis(chain.start.at, cursor);
+      const inf = mode === "line" ? inferAxis(chain.start.at, cursor) : { axis: null };
       label = dist(chain.start.at, line).toFixed(1) + (inf.axis ? `  ${inf.axis === "horizontal" ? "H" : "V"}` : "");
     }
     const modeName = mode === "line" || !chain.tangent ? t("poly.line") : t(`poly.${mode}`);

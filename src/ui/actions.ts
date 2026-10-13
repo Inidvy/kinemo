@@ -4,6 +4,8 @@ import type { Editor } from "../app/editor";
 import { constraintTypes } from "../constraints";
 import { downloadDoc, pickFile } from "../io/file";
 import { icons, glyphIcon } from "./icons";
+import { pendingConstraint, startConstraintPick } from "../tools/constraintPick";
+import { setTool } from "./toolbar";
 
 export interface Action {
   id: string;
@@ -72,6 +74,8 @@ const builtins: Action[] = [
     id: "new",
     label: "action.new",
     icon: icons.new,
+    shortcut: "n",
+    shift: true,
     group: "file",
     run: (ed) => ed.change((doc) => Object.assign(doc, emptyDoc(), { settings: doc.settings })),
   },
@@ -103,6 +107,10 @@ for (const c of constraintTypes.all()) {
     icon: glyphIcon(c.glyph),
     shortcut: c.shortcut,
     group: "constraint",
-    run: (ed) => ed.applyConstraint(c.id),
+    // Apply to the selection if it fits; otherwise pick the items next.
+    run: (ed) => {
+      if (!ed.applyConstraint(c.id, true)) startConstraintPick(ed, c.id, (id) => setTool(ed, id));
+    },
+    active: (ed) => ed.tool === "constraint" && pendingConstraint() === c.id,
   });
 }

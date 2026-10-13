@@ -134,12 +134,12 @@ export class Editor {
   }
 
   /** Apply a constraint type to the current selection. */
-  applyConstraint(type: string): boolean {
+  applyConstraint(type: string, quiet = false): boolean {
     const def = constraintTypes.get(type);
     const sel = [...this.selection].filter((id) => id in this.doc.points || id in this.doc.geoms);
     const out = def.fromSelection(this.doc, sel);
     if (typeof out === "string") {
-      this.flash(t(out));
+      if (!quiet) this.flash(t(out));
       return false;
     }
     this.change((doc) => {

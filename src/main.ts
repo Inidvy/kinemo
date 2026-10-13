@@ -36,7 +36,8 @@ async function main() {
   const status = $("#status");
   let saveTimer = 0;
   ed.subscribe(() => {
-    status.textContent = ed.message || t(tools.find(ed.tool)?.hint ?? "");
+    const tool = tools.find(ed.tool);
+    status.textContent = ed.message || tool?.hintText?.(ed) || t(tool?.hint ?? "");
     status.classList.toggle("flash", !!ed.message);
     clearTimeout(saveTimer);
     saveTimer = window.setTimeout(() => autosave(ed.doc), 400);

@@ -29,6 +29,7 @@ export const perpendicular: ConstraintType = {
   id: "perpendicular",
   label: "c.perpendicular",
   glyph: "⊥",
+  shortcut: "n",
   fromSelection(doc, sel) {
     const { lines, geoms, points } = split(doc, sel);
     if (lines.length !== 2 || geoms.length !== 2 || points.length) return "hint.selectLines2";
@@ -113,6 +114,7 @@ export const equal: ConstraintType = {
   id: "equal",
   label: "c.equal",
   glyph: "=",
+  shortcut: "q",
   fromSelection(doc, sel) {
     const { geoms, lines, curves, points } = split(doc, sel);
     if (points.length || geoms.length < 2) return "hint.selectEqual";
@@ -137,6 +139,7 @@ export const concentric: ConstraintType = {
   id: "concentric",
   label: "c.concentric",
   glyph: "◎",
+  shortcut: "z",
   fromSelection(doc, sel) {
     const { curves, geoms, points } = split(doc, sel);
     if (curves.length < 2 || geoms.length !== curves.length || points.length) return "hint.selectCurves2";
@@ -153,6 +156,7 @@ export const midpoint: ConstraintType = {
   id: "midpoint",
   label: "c.midpoint",
   glyph: "⋈",
+  shortcut: "u",
   fromSelection(doc, sel) {
     const { points, lines, geoms } = split(doc, sel);
     if (points.length !== 1 || lines.length !== 1 || geoms.length !== 1) return "hint.selectPointAndLine";
@@ -172,6 +176,7 @@ export const symmetric: ConstraintType = {
   id: "symmetric",
   label: "c.symmetric",
   glyph: "⇄",
+  shortcut: "y",
   fromSelection(doc, sel) {
     const { points, lines, geoms } = split(doc, sel);
     if (points.length === 2 && lines.length === 1 && geoms.length === 1) {
@@ -194,6 +199,7 @@ export const fix: ConstraintType = {
   id: "fix",
   label: "c.fix",
   glyph: "⚓",
+  shortcut: "w",
   fromSelection(doc, sel) {
     const { points, geoms } = split(doc, sel);
     const ids = new Set(points);
