@@ -63,7 +63,7 @@ Select geometry and press G to group it into one rigid body. A body fixed at one
 | ← → ↑ ↓ | Hold to move the first and second slider (each slider's keys can be changed in its panel, also to a combination like 1 + ←) |
 | Del | Delete the selected joint's slider |
 
-Sliders sit in the right panel, and you can drag them and the bars together. Dragging a joint moves its body, so a slider joint runs along its slot. A driven slider joint shows an arrow along its slot. Sliders ease smoothly to a new value; hold ◀ ▶ or a slider's keys to keep it moving. When a slider or a drag asks for more than the mechanism can do, it stops at the last pose that works. The feature list shows the mechanism's degrees of freedom.
+Sliders sit in the right panel, and you can drag them and the bars together. Dragging a joint moves its body, so a slider joint runs along its slot. A driven slider joint shows an arrow along its slot. Lines and arcs of one body tagged as track (K) that join end to end form one track: a pin put on any of them runs along the whole chain, round corners, and stops at its ends (or goes round and round if the track is closed). Sliders ease smoothly to a new value; hold ◀ ▶ or a slider's keys to keep it moving. When a slider or a drag asks for more than the mechanism can do, it stops at the last pose that works. The feature list shows the mechanism's degrees of freedom.
 
 ## Adding a feature
 

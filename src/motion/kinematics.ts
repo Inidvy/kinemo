@@ -129,12 +129,11 @@ export class Mechanism {
         if (!kind.overLimit || clamped.has(j.id)) continue;
         const over = kind.overLimit(k, j);
         if (over !== null && Math.abs(over) > 1e-7) {
-          // Clamp to the end it ran past, measured fresh at each iterate.
-          const sign = Math.sign(over);
-          clamps.push((kk) => {
-            const o = kind.overLimit!(kk, j);
-            return o === null ? 0 : Math.sign(o) === sign ? o : 0;
-          });
+          // Hold it at the end it ran past. As an equation rather than a
+          // one-sided limit, so the solver can't flip-flop across the end.
+          const [lo, hi] = kind.range(this.doc, j);
+          const end = over > 0 ? hi : lo;
+          clamps.push((kk) => kind.measure(kk, j) - end);
           clamped.add(j.id);
           added = true;
         }

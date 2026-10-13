@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { addConstraint, addGeom, addPoint, emptyDoc, type Id, type Line, type SketchDoc } from "../src/core/model";
+import { addConstraint, addGeom, addPoint, emptyDoc, type Arc, type Id, type Line, type SketchDoc } from "../src/core/model";
 import { Mechanism } from "../src/motion/kinematics";
 import { applyPose } from "../src/motion/bodies";
+import { jointKinds } from "../src/motion/joints";
 
 function bar(doc: SketchDoc, x1: number, y1: number, x2: number, y2: number) {
   const p1 = addPoint(doc, x1, y1), p2 = addPoint(doc, x2, y2);
@@ -9,6 +10,9 @@ function bar(doc: SketchDoc, x1: number, y1: number, x2: number, y2: number) {
 }
 function body(doc: SketchDoc, id: string, members: Id[], ground = false) {
   doc.bodies[id] = { id, name: id, members, ground };
+}
+function jointRange(m: Mechanism, id: Id) {
+  return jointKinds.get(m.joint(id)!.kind).range(m.doc, m.joint(id)!)[1];
 }
 function apply(doc: SketchDoc, m: Mechanism, q: number[]) {
   doc.motion.poses = m.poses(q);
@@ -125,6 +129,81 @@ describe("motion", () => {
     expect(m.dof()).toBe(2);
     const q = m.solve({ drag: { body: "block", local: doc.points[block.p1], to: { x: 80, y: 0 } } })!;
     expect(m.measure(q, slot)).toBeCloseTo(50, 4);
+  });
+});
+
+describe("tracks", () => {
+  /** An L-shaped ground track (0,0)-(50,0)-(50,40) of two track lines, with a block on the first line. */
+  function lTrack() {
+    const doc = emptyDoc();
+    const a = bar(doc, 0, 0, 50, 0), b = bar(doc, 50, 40, 50, 0);
+    doc.geoms[a.id].track = true;
+    doc.geoms[b.id].track = true;
+    addConstraint(doc, { type: "coincident", refs: [a.p2, b.p2] });
+    const block = bar(doc, 10, 0, 10, 5);
+    const joint = addConstraint(doc, { type: "onCurve", refs: [block.p1, a.id] });
+    body(doc, "rail", [a.id, b.id], true);
+    body(doc, "block", [block.id]);
+    return { doc, block, joint };
+  }
+
+  it("runs a pin across connected track pieces", () => {
+    const { doc, block, joint } = lTrack();
+    const m = new Mechanism(doc);
+    expect(m.joints[0].kind).toBe("track");
+    expect(m.dof()).toBe(2);
+    expect(m.measure(m.current(), joint)).toBeCloseTo(10, 6);
+    // Drive round the corner and up the second line.
+    const r = m.driveTo(joint, 70);
+    expect(r.reached).toBe(true);
+    const p = applyPose(m.pose(r.q, "block"), doc.points[block.p1]);
+    expect(p.x).toBeCloseTo(50, 4);
+    expect(p.y).toBeCloseTo(20, 4);
+    // Dragging round the corner and past the far end stops at the end.
+    const back = structuredClone(doc);
+    let mm = new Mechanism(back);
+    for (let i = 1; i <= 30; i++) {
+      const to = i <= 15 ? { x: 10 + (40 * i) / 15, y: 0 } : { x: 50, y: (90 * (i - 15)) / 15 };
+      const q = mm.solve({ drag: { body: "block", local: doc.points[block.p1], to }, maxTurn: 0.8 });
+      if (q) apply(back, mm, q);
+      mm = new Mechanism(structuredClone(back));
+    }
+    expect(mm.measure(mm.current(), joint)).toBeCloseTo(90, 3);
+  });
+
+  it("goes round a closed track of a line and an arc", () => {
+    const doc = emptyDoc();
+    // A D shape: a line from (0,-10) to (0,10) and an arc back round to (0,-10).
+    const line = bar(doc, 0, -10, 0, 10);
+    const c = addPoint(doc, 0, 0), s = addPoint(doc, 0, 10), e = addPoint(doc, 0, -10);
+    const arc = addGeom<Arc>(doc, { kind: "arc", c, s, e });
+    doc.geoms[line.id].track = true;
+    doc.geoms[arc].track = true;
+    const block = bar(doc, 0, 0, 3, 0);
+    const joint = addConstraint(doc, { type: "onCurve", refs: [block.p1, line.id] });
+    body(doc, "rail", [line.id, arc], true);
+    body(doc, "block", [block.id]);
+    const m = new Mechanism(doc);
+    expect(m.joints[0].kind).toBe("track");
+    const total = 20 + Math.PI * 10;
+    expect(m.context(m.current()) && jointRange(m, joint)).toBeCloseTo(total, 6);
+    // Round the arc to its far side, (-10, 0).
+    const r = m.driveTo(joint, 20 + (Math.PI * 10) / 2);
+    expect(r.reached).toBe(true);
+    const p = applyPose(m.pose(r.q, "block"), doc.points[block.p1]);
+    expect(p.x).toBeCloseTo(-10, 3);
+    expect(p.y).toBeCloseTo(0, 3);
+  });
+
+  it("keeps a single track line as a plain slot", () => {
+    const doc = emptyDoc();
+    const a = bar(doc, 0, 0, 50, 0);
+    doc.geoms[a.id].track = true;
+    const block = bar(doc, 10, 0, 10, 5);
+    addConstraint(doc, { type: "onCurve", refs: [block.p1, a.id] });
+    body(doc, "rail", [a.id], true);
+    body(doc, "block", [block.id]);
+    expect(new Mechanism(doc).joints[0].kind).toBe("slot");
   });
 });
 

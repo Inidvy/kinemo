@@ -2,7 +2,7 @@ import type { Editor } from "../app/editor";
 import { arcRadius, type Body, type Geometry, type Id, type Pose, type SketchDoc, type Vec } from "../core/model";
 import { angleInSweep, angleOf, dist, distToSegment, sub } from "../core/geom";
 import { applyPose, bodyColor, bodyGeoms, groundBodies, IDENTITY, isGround, poseOf } from "../motion/bodies";
-import { jointKinds, type Joint } from "../motion/joints";
+import { jointKinds, trackDirection, type Joint } from "../motion/joints";
 import { colors } from "./style";
 import type { View } from "./view";
 
@@ -24,6 +24,7 @@ function slotGeoms(doc: SketchDoc, joints: Joint[]): Set<Id> {
   for (const j of joints) {
     if (j.kind === "slot") out.add(j.refs[3]);
     if (j.kind === "curveSlot") out.add(j.refs[2]);
+    if (j.kind === "track") for (const id of j.refs.slice(1)) out.add(id);
   }
   for (const g of Object.values(doc.geoms)) if (g.track) out.add(g.id);
   return out;
@@ -323,6 +324,11 @@ export function drawJoints(ctx: CanvasRenderingContext2D, ed: Editor): void {
     if (driven.has(j.id)) {
       if (j.kind === "slot") slideArrow(ctx, at, v.toScreen(k.w(j.refs[1])), v.toScreen(k.w(j.refs[2])), r);
       else if (j.kind === "curveSlot") curveArrow(ctx, at, v.toScreen(k.w(j.refs[1])), r);
+      else if (j.kind === "track") {
+        const t = trackDirection(k, j);
+        if (t.kind === "line") slideArrow(ctx, at, v.toScreen(t.from), v.toScreen(t.to), r);
+        else curveArrow(ctx, at, v.toScreen(t.c), r);
+      }
       else motorArrow(ctx, at, r + 6);
     }
   }

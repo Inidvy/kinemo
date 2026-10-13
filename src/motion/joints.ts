@@ -157,6 +157,210 @@ jointKinds.register({
   anchor: (k, j) => k.w(j.refs[0]),
 });
 
+// ------------------------------------------------------------------ track
+
+/** A piece of a track in world coordinates, walked from `from` to `to`. */
+type Piece =
+  | { kind: "line"; from: Vec; to: Vec; length: number }
+  | { kind: "arc"; c: Vec; r: number; start: number; sweep: number; dir: number; length: number };
+
+const TWO_PI = Math.PI * 2;
+const wrap2 = (a: number) => ((a % TWO_PI) + TWO_PI) % TWO_PI;
+
+/** The two end points of a line or arc, in its own order. */
+function ends(doc: SketchDoc, gid: Id): [Id, Id] | null {
+  const g = doc.geoms[gid];
+  if (g?.kind === "line") return [g.p1, g.p2];
+  if (g?.kind === "arc") return [g.s, g.e];
+  return null;
+}
+
+/**
+ * The chain of connected track lines and arcs of one body that a piece
+ * belongs to, in walking order, with each piece's direction (+1 as drawn,
+ * -1 reversed). Stops where the track ends or forks.
+ */
+function trackChain(doc: SketchDoc, owner: Map<Id, Id>, gid: Id): { ids: Id[]; dirs: number[]; closed: boolean } | null {
+  const body = owner.get(gid);
+  const key = (id: Id) => `${doc.points[id].x.toFixed(4)},${doc.points[id].y.toFixed(4)}`;
+  const at = new Map<string, Id[]>();
+  for (const g of Object.values(doc.geoms)) {
+    const e = g.track && !g.construction && owner.get(g.id) === body ? ends(doc, g.id) : null;
+    if (!e) continue;
+    for (const p of e) at.set(key(p), [...(at.get(key(p)) ?? []), g.id]);
+  }
+  const first = ends(doc, gid);
+  if (!first || !doc.geoms[gid].track) return null;
+  const ids = [gid], dirs = [1];
+  const used = new Set(ids);
+  // Walk on from one end of the first piece, then back from the other.
+  const walk = (from: string, push: (id: Id, dir: number) => void, outward: (dir: number) => 0 | 1) => {
+    let v = from;
+    for (;;) {
+      const next = (at.get(v) ?? []).filter((id) => !used.has(id));
+      if (next.length !== 1 || (at.get(v)?.length ?? 0) > 2) return;
+      const id = next[0];
+      const [s, e] = ends(doc, id)!;
+      const dir = key(s) === v ? 1 : -1;
+      used.add(id);
+      push(id, dir);
+      v = key(outward(dir) ? e : s);
+    }
+  };
+  walk(key(first[1]), (id, dir) => (ids.push(id), dirs.push(dir)), (dir) => (dir > 0 ? 1 : 0));
+  const tail = ids[ids.length - 1], tailDir = dirs[dirs.length - 1];
+  const tailEnd = ends(doc, tail)![tailDir > 0 ? 1 : 0];
+  const closed = ids.length > 1 && key(tailEnd) === key(first[0]);
+  if (!closed) walk(key(first[0]), (id, dir) => (ids.unshift(id), dirs.unshift(-dir)), (dir) => (dir > 0 ? 1 : 0));
+  return ids.length > 1 ? { ids, dirs, closed } : null;
+}
+
+function pieces(k: JointContext, j: Joint): Piece[] {
+  const n = j.refs.length - 1;
+  const out: Piece[] = [];
+  for (let i = 0; i < n; i++) {
+    const g = k.doc.geoms[j.refs[i + 1]];
+    const dir = j.data![i + 1];
+    if (g.kind === "line") {
+      const a = k.w(g.p1), b = k.w(g.p2);
+      const [from, to] = dir > 0 ? [a, b] : [b, a];
+      out.push({ kind: "line", from, to, length: dist(a, b) });
+    } else if (g.kind === "arc") {
+      const c = k.w(g.c), s = k.w(g.s), e = k.w(g.e);
+      const r = dist(c, s);
+      const a0 = angleOf(sub(s, c)), a1 = angleOf(sub(e, c));
+      const sweep = wrap2(a1 - a0) || TWO_PI;
+      // Walking reversed starts at the arc's end and turns clockwise.
+      out.push({ kind: "arc", c, r, start: dir > 0 ? a0 : a1, sweep, dir, length: sweep * r });
+    }
+  }
+  return out;
+}
+
+/** Start and end point and direction of travel of a piece. */
+function pieceEnds(x: Piece): { from: Vec; to: Vec; tFrom: Vec; tTo: Vec } {
+  if (x.kind === "line") {
+    const l = x.length || 1;
+    const u = { x: (x.to.x - x.from.x) / l, y: (x.to.y - x.from.y) / l };
+    return { from: x.from, to: x.to, tFrom: u, tTo: u };
+  }
+  const at = (q: number) => ({ x: x.c.x + Math.cos(q) * x.r, y: x.c.y + Math.sin(q) * x.r });
+  const tan = (q: number) => ({ x: -Math.sin(q) * x.dir, y: Math.cos(q) * x.dir });
+  const e = x.start + x.dir * x.sweep;
+  return { from: at(x.start), to: at(e), tFrom: tan(x.start), tTo: tan(e) };
+}
+
+/**
+ * Where a point sits on a track: the piece it belongs to, the distance along
+ * the track, and how far off the track it is. Each piece owns the region
+ * between the lines that halve the turn at its two ends, and inside it the
+ * piece runs on past its ends, so distance and offset change smoothly as the
+ * point goes round a corner.
+ */
+function locate(k: JointContext, j: Joint): { piece: Piece; s: number; off: number; total: number } {
+  const p = k.w(j.refs[0]);
+  const list = pieces(k, j);
+  const closed = j.data![0] > 0;
+  const n = list.length;
+  const geo = list.map(pieceEnds);
+  const total = list.reduce((s, x) => s + x.length, 0);
+  const norm = (v: Vec) => {
+    const l = Math.hypot(v.x, v.y) || 1;
+    return { x: v.x / l, y: v.y / l };
+  };
+  // Is p on the far side of the corner after piece i (between i and i+1)?
+  const past = (i: number) => {
+    const g = geo[i], h = geo[(i + 1) % n];
+    const m = norm({ x: g.tTo.x + h.tFrom.x, y: g.tTo.y + h.tFrom.y });
+    return dot(sub(p, g.to), m) > 0;
+  };
+  // Each piece's distance along the track and offset, running on past its
+  // ends, plus how far the point is from the piece itself.
+  const starts: number[] = [];
+  const at = list.map((x, i) => {
+    starts.push(i ? starts[i - 1] + list[i - 1].length : 0);
+    if (x.kind === "line") {
+      const u = sub(x.to, x.from);
+      const l2 = dot(u, u) || 1;
+      const tt = dot(sub(p, x.from), u) / l2;
+      const tc = Math.min(1, Math.max(0, tt));
+      const d = dist(p, { x: x.from.x + u.x * tc, y: x.from.y + u.y * tc });
+      return { t: tt * x.length, off: cross(sub(p, x.from), u) / Math.sqrt(l2), d, end: tt > 1 ? 1 : tt < 0 ? -1 : 0 };
+    }
+    const ang = angleOf(sub(p, x.c));
+    let u = wrap2(x.dir > 0 ? ang - x.start : x.start - ang);
+    // Past either end, measure from whichever end is nearer.
+    if (u > x.sweep + (TWO_PI - x.sweep) / 2) u -= TWO_PI;
+    const uc = Math.min(x.sweep, Math.max(0, u));
+    const q = x.start + x.dir * uc;
+    const d = dist(p, { x: x.c.x + Math.cos(q) * x.r, y: x.c.y + Math.sin(q) * x.r });
+    return { t: u * x.r, off: dist(p, x.c) - x.r, d, end: u > x.sweep ? 1 : u < 0 ? -1 : 0 };
+  });
+  let i = 0;
+  at.forEach((x, k) => {
+    if (x.d < at[i].d - 1e-12) i = k;
+  });
+  // Near a corner, the line that halves the turn decides which piece the point is on.
+  if (at[i].end > 0 && (i < n - 1 || closed) && past(i)) i = (i + 1) % n;
+  else if (at[i].end < 0 && (i > 0 || closed) && !past((i - 1 + n) % n)) i = (i - 1 + n) % n;
+  return { piece: list[i], s: starts[i] + at[i].t, off: at[i].off, total };
+}
+
+/** Which way a track runs at the joint: along a line, or round an arc's centre. */
+export function trackDirection(k: JointContext, j: Joint): { kind: "line"; from: Vec; to: Vec } | { kind: "arc"; c: Vec } {
+  const { piece } = locate(k, j);
+  return piece.kind === "line" ? { kind: "line", from: piece.from, to: piece.to } : { kind: "arc", c: piece.c };
+}
+
+/** Track: a point of one body runs along a chain of connected track lines and arcs of another. */
+jointKinds.register({
+  id: "track",
+  label: "joint.track",
+  unit: "mm",
+  fromConstraint(doc, c, owner) {
+    if (c.type !== "onCurve") return null;
+    const [p, gid] = c.refs;
+    const a = owner.get(gid), b = owner.get(p);
+    if (!a || !b || a === b) return null;
+    const chain = trackChain(doc, owner, gid);
+    if (!chain) return null;
+    return { id: c.id, kind: "track", a, b, refs: [p, ...chain.ids], data: [chain.closed ? 1 : 0, ...chain.dirs] };
+  },
+  equations(k, j) {
+    return [locate(k, j).off];
+  },
+  overLimit(k, j) {
+    if (j.data![0] > 0) return null;
+    const { s, total } = locate(k, j);
+    if (s < 0) return s;
+    if (s > total) return s - total;
+    return null;
+  },
+  measure(k, j) {
+    const { s, total } = locate(k, j);
+    return j.data![0] > 0 ? ((s % total) + total) % total : s;
+  },
+  drive(k, j, value) {
+    const { s, total } = locate(k, j);
+    const d = s - value;
+    // Round a closed track, go the short way.
+    return j.data![0] > 0 ? d - total * Math.round(d / total) : d;
+  },
+  range(doc, j) {
+    let total = 0;
+    for (const gid of j.refs.slice(1)) {
+      const g = doc.geoms[gid];
+      if (g.kind === "line") total += dist(doc.points[g.p1], doc.points[g.p2]);
+      else if (g.kind === "arc") {
+        const r = dist(doc.points[g.c], doc.points[g.s]);
+        total += (wrap2(angleOf(sub(doc.points[g.e], doc.points[g.c])) - angleOf(sub(doc.points[g.s], doc.points[g.c]))) || TWO_PI) * r;
+      }
+    }
+    return [0, total];
+  },
+  anchor: (k, j) => k.w(j.refs[0]),
+});
+
 /** Slot: a point of one body slides along a line of another. */
 jointKinds.register({
   id: "slot",
