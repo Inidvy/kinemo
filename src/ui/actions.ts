@@ -83,6 +83,7 @@ const builtins: Action[] = [
     label: "action.icons",
     icon: icons.icons,
     shortcut: "i",
+    shift: false,
     group: "view",
     modes: SKETCH,
     run: (ed) => ed.live((doc) => (doc.settings.showConstraintIcons = !doc.settings.showConstraintIcons)),
@@ -130,7 +131,7 @@ const builtins: Action[] = [
     id: "makeBody",
     label: "action.makeBody",
     icon: icons.body,
-    shortcut: "b",
+    shortcut: "g",
     shift: false,
     group: "body",
     modes: SKETCH,
@@ -162,6 +163,7 @@ const builtins: Action[] = [
     label: "action.ground",
     icon: icons.ground,
     shortcut: "g",
+    shift: true,
     group: "body",
     run(ed) {
       const ids = selectedBodies(ed);
@@ -178,7 +180,7 @@ const builtins: Action[] = [
     id: "bars",
     label: "action.bars",
     icon: icons.bars,
-    shortcut: "b",
+    shortcut: "i",
     shift: true,
     group: "view",
     modes: SKETCH,

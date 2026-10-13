@@ -1,5 +1,6 @@
 import { Registry } from "../core/registry";
 import type { Constraint, Id, SketchDoc, Vec } from "../core/model";
+import { isGround } from "./bodies";
 import { angleInSweep, angleOf, cross, dist, dot, sub } from "../core/geom";
 
 /**
@@ -74,7 +75,7 @@ function twoBodies(owner: Map<Id, Id>, x: Id, y: Id, doc: SketchDoc): [Id, Id] |
   const a = owner.get(x), b = owner.get(y);
   if (!a || !b || a === b) return null;
   // Measure against ground where there is one, so a crank reads its own angle.
-  if (doc.bodies[b]?.ground && !doc.bodies[a]?.ground) return [b, a];
+  if (isGround(doc, b) && !isGround(doc, a)) return [b, a];
   return [a, b];
 }
 

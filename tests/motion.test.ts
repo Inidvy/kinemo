@@ -127,3 +127,29 @@ describe("motion", () => {
     expect(m.measure(q, slot)).toBeCloseTo(50, 4);
   });
 });
+
+describe("bodies", () => {
+  it("treats a body with a fixed point as ground", async () => {
+    const { groundBodies } = await import("../src/motion/bodies");
+    const doc = emptyDoc();
+    const a = bar(doc, 0, 0, 10, 0);
+    addConstraint(doc, { type: "fix", refs: [a.p1], data: { x: 0, y: 0 } });
+    body(doc, "a", [a.id]);
+    expect(groundBodies(doc).has("a")).toBe(true);
+    expect(new Mechanism(doc).moving).toEqual([]);
+  });
+
+  it("finds a triangle plate even when an edge is split into three lines", async () => {
+    const { bodyLoops } = await import("../src/render/bars");
+    const doc = emptyDoc();
+    const ids = [bar(doc, 0, 0, 10, 0), bar(doc, 10, 0, 20, 0), bar(doc, 20, 0, 30, 0), bar(doc, 30, 0, 15, 20), bar(doc, 15, 20, 0, 0)].map((l) => l.id);
+    body(doc, "tri", ids);
+    const loops = bodyLoops(doc, doc.bodies.tri);
+    expect(loops.length).toBe(1);
+    expect(loops[0].length).toBe(5);
+    // Three lines in a row make no plate.
+    const doc2 = emptyDoc();
+    body(doc2, "row", [bar(doc2, 0, 0, 10, 0), bar(doc2, 10, 0, 20, 0), bar(doc2, 20, 0, 30, 0)].map((l) => l.id));
+    expect(bodyLoops(doc2, doc2.bodies.row).length).toBe(0);
+  });
+});

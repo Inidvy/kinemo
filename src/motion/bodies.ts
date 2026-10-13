@@ -16,6 +16,30 @@ export function ownerMap(doc: SketchDoc): Map<Id, Id> {
   return own;
 }
 
+const groundCache = new WeakMap<SketchDoc, Set<Id>>();
+
+/**
+ * Ground bodies never move: the ones marked as ground, and any body with a
+ * fixed point or line in the sketch.
+ */
+export function groundBodies(doc: SketchDoc): Set<Id> {
+  let set = groundCache.get(doc);
+  if (set) return set;
+  set = new Set(Object.values(doc.bodies).filter((b) => b.ground).map((b) => b.id));
+  const own = ownerMap(doc);
+  for (const c of Object.values(doc.constraints)) {
+    if (c.type !== "fix") continue;
+    for (const r of c.refs) if (own.has(r)) set.add(own.get(r)!);
+  }
+  groundCache.set(doc, set);
+  return set;
+}
+
+export const isGround = (doc: SketchDoc, bodyId: Id | undefined): boolean => !!bodyId && groundBodies(doc).has(bodyId);
+
+/** Ground because of a Fix constraint rather than the ground switch. */
+export const fixedGround = (doc: SketchDoc, b: Body): boolean => !b.ground && isGround(doc, b.id);
+
 export function bodyGeoms(doc: SketchDoc, b: Body): Geometry[] {
   return b.members.map((id) => doc.geoms[id]).filter(Boolean);
 }
@@ -45,11 +69,11 @@ export function motionPoint(doc: SketchDoc, owner: Map<Id, Id>, pointId: Id): Ve
 }
 
 /** Bar colours, picked by body order. Ground is always grey. */
-const PALETTE = ["#7fb3e8", "#f2b36b", "#8fd19e", "#e79ac0", "#b9a5e6", "#7fd3d1", "#e8d27f", "#f0937f"];
-export const GROUND_COLOR = "#b7bcc5";
+const PALETTE = ["#5aa9f0", "#f5a54a", "#4cc788", "#ef7fb4", "#9f86f0", "#3fc9c4", "#e6c13d", "#f27a64"];
+export const GROUND_COLOR = "#9aa1ad";
 
 export function bodyColor(doc: SketchDoc, b: Body): string {
-  if (b.ground) return GROUND_COLOR;
+  if (isGround(doc, b.id)) return GROUND_COLOR;
   const i = Object.keys(doc.bodies).indexOf(b.id);
   return PALETTE[i % PALETTE.length];
 }

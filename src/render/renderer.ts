@@ -20,14 +20,14 @@ export function render(ctx: CanvasRenderingContext2D, ed: Editor, w: number, h: 
   if (ed.mode === "motion") {
     // Motion mode: no constraints or dimensions, just bars, slots and joints.
     drawLooseGeometry(ctx, ed);
-    drawBodies(ctx, ed, { posed: true, alpha: 1, selected: new Set(), hover: ed.hover });
+    drawBodies(ctx, ed, { posed: true, alpha: 1, hover: ed.hover });
     drawJoints(ctx, ed);
     tools.find(ed.tool)?.overlay?.({ ctx, ed });
     ctx.restore();
     return;
   }
   if (Object.keys(doc.bodies).length) {
-    drawBodies(ctx, ed, { posed: false, alpha: doc.settings.solidBars ? 0.9 : 0.3, selected: new Set(), hover: ed.hover });
+    drawBodies(ctx, ed, { posed: false, alpha: doc.settings.solidBars ? 0.9 : 0.35, hover: ed.hover });
   }
   const hoverRefs = new Set<Id>();
   const selRefs = new Set<Id>();

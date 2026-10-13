@@ -89,6 +89,8 @@ export interface Driver {
   joint: Id;
   a: Id;
   b: Id;
+  /** Keys that move the slider down and up while held (KeyboardEvent.key, lower case). */
+  keys?: [string, string];
 }
 
 export interface MotionState {

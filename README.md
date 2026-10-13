@@ -37,9 +37,9 @@ Pushing to `main` deploys to GitHub Pages (Settings → Pages → Source: GitHub
 | Ctrl+Z / Ctrl+Y | Undo / redo |
 | Ctrl+S / Ctrl+O | Save / open a `.kinemo.json` file |
 | Shift+N | New sketch |
-| B | Make a body from the selected lines, arcs, circles and points |
-| G | Toggle ground on the selected body |
-| Shift+B | Solid or see-through bars |
+| G | Group the selected lines, arcs, circles and points into a body |
+| Shift+G | Toggle ground on the selected body |
+| Shift+I | Solid or see-through bars |
 | Tab | Switch between Sketch and Motion |
 | Esc | Cancel, then back to Select |
 
@@ -51,7 +51,7 @@ Over-constraining is allowed. The newest constraint that causes it is shown in d
 
 ## Bodies and Motion mode
 
-Select geometry and press B to make it one rigid body; press G to make a body the ground. Joints come from the sketch: wherever geometry of two bodies is coincident (or concentric) they are pinned, and a point of one body on a line or arc of another slides along it. Lines that carry a slider are drawn as slots.
+Select geometry and press G to group it into one rigid body. A body with a fixed point (W) is ground automatically; Shift+G makes any body ground. Closed loops of lines in a body are drawn as plates, and lines a slider runs along get a slot cut into them. Joints come from the sketch: wherever geometry of two bodies is coincident (or concentric) they are pinned, and a point of one body on a line or arc of another slides along it. Lines that carry a slider are drawn as slots.
 
 | Key (Motion) | Action |
 | --- | --- |
@@ -59,10 +59,11 @@ Select geometry and press B to make it one rigid body; press G to make a body th
 | D | Add slider: click the body it measures from, the body that moves, then the joint (or click a joint) |
 | Shift+F | Flip to the other way the mechanism assembles |
 | R | Reset every body to its sketched position |
-| G | Toggle ground |
+| Shift+G | Toggle ground |
+| ← → ↑ ↓ | Hold to move the first and second slider (each slider's keys can be changed in its panel) |
 | Del | Delete the selected joint's slider |
 
-Sliders sit in the right panel, and you can drag them and the bars together. When a slider or a drag asks for more than the mechanism can do, it stops at the last pose that works. The feature list shows the mechanism's degrees of freedom.
+Sliders sit in the right panel, and you can drag them and the bars together. Sliders ease smoothly to a new value; hold ◀ ▶ or a slider's keys to keep it moving. When a slider or a drag asks for more than the mechanism can do, it stops at the last pose that works. The feature list shows the mechanism's degrees of freedom.
 
 ## Adding a feature
 

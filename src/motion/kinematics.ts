@@ -1,5 +1,5 @@
 import type { Driver, Id, Pose, SketchDoc, Vec } from "../core/model";
-import { applyPose, IDENTITY, ownerMap } from "./bodies";
+import { applyPose, IDENTITY, isGround, ownerMap } from "./bodies";
 import { deriveJoints, jointKinds, type Joint, type JointContext } from "./joints";
 import { rank, solveLinear } from "./linalg";
 
@@ -45,7 +45,7 @@ export class Mechanism {
     this.owner = ownerMap(doc);
     this.joints = deriveJoints(doc, this.owner);
     this.moving = Object.values(doc.bodies)
-      .filter((b) => !b.ground)
+      .filter((b) => !isGround(doc, b.id))
       .map((b) => b.id);
     this.moving.forEach((id, i) => this.index.set(id, i * 3));
     const pts = Object.values(doc.points);
@@ -270,7 +270,7 @@ export class Mechanism {
     let locks = drivers.map((d) => ({ joint: d.joint, value: this.measure(q0, d.joint) }));
     if (!locks.length) {
       // No sliders: keep the first joint to ground where it is.
-      const j = this.joints.find((j) => this.doc.bodies[j.a]?.ground || this.doc.bodies[j.b]?.ground) ?? this.joints[0];
+      const j = this.joints.find((j) => isGround(this.doc, j.a) || isGround(this.doc, j.b)) ?? this.joints[0];
       if (j) locks = [{ joint: j.id, value: this.measure(q0, j.id) }];
     }
     const found: number[][] = [];

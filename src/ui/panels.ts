@@ -6,6 +6,7 @@ import { formatValue } from "../render/layout";
 import { t } from "../i18n";
 import { actions } from "./actions";
 import { constraintIcon, icons } from "./icons";
+import type { SliderMotion } from "./sliderMotion";
 import { bodiesSection, bodyProps, motionProps, motionTree, patchSliders, wireMotionPanel } from "./motionPanels";
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -82,7 +83,7 @@ export function mountFeatureTree(el: HTMLElement, ed: Editor): void {
 }
 
 /** Right panel: properties of the selection and the constraints it allows. */
-export function mountProperties(el: HTMLElement, ed: Editor): void {
+export function mountProperties(el: HTMLElement, ed: Editor, sliders: SliderMotion): void {
   el.addEventListener("click", (e) => {
     const b = (e.target as HTMLElement).closest<HTMLElement>("[data-apply],[data-delete]");
     if (!b) return;
@@ -109,12 +110,15 @@ export function mountProperties(el: HTMLElement, ed: Editor): void {
     }
   });
 
-  wireMotionPanel(el, ed, (id) => actions.get(id).run(ed));
+  wireMotionPanel(el, ed, sliders, (id) => actions.get(id).run(ed));
 
   const update = () => {
-    const focused = document.activeElement && el.contains(document.activeElement);
+    // Only an input being typed in or dragged holds off a rebuild; a clicked button doesn't.
+    const active = document.activeElement;
+    const focused = !!active && el.contains(active) && active.matches("input, select, textarea");
     if (ed.mode === "motion") {
-      if (focused) patchSliders(el, ed);
+      // Rebuilding mid-movement would drop a held button; just refresh the values.
+      if (focused || sliders.active) patchSliders(el, ed);
       else el.innerHTML = motionProps(ed);
       return;
     }

@@ -1,5 +1,6 @@
 import type { Id, Vec } from "../core/model";
 import { applyPose, poseOf } from "../motion/bodies";
+import { addDriver } from "../motion/drivers";
 import { icons } from "../ui/icons";
 import { t } from "../i18n";
 import type { Editor } from "../app/editor";
@@ -64,14 +65,11 @@ export const moveTool: Tool = {
 
 let picks: Id[] = [];
 
-function addDriver(ed: Editor, joint: Id, a: Id, b: Id) {
+function createDriver(ed: Editor, joint: Id, a: Id, b: Id) {
   if (Object.values(ed.doc.motion.drivers).some((d) => d.joint === joint)) {
     ed.flash(t("drive.exists"));
   } else {
-    ed.change((doc) => {
-      const id = `d${doc.nextId++}`;
-      doc.motion.drivers[id] = { id, joint, a, b };
-    });
+    ed.change((doc) => addDriver(doc, joint, a, b));
     ed.flash(t("drive.added"));
   }
   picks = [];
@@ -110,7 +108,7 @@ export const driveTool: Tool = {
     if (h?.kind === "joint") {
       const j = m.joint(h.id)!;
       const [a, b] = picks.length === 2 && new Set(picks).has(j.a) && new Set(picks).has(j.b) ? picks : [j.a, j.b];
-      addDriver(ed, j.id, a, b);
+      createDriver(ed, j.id, a, b);
       return;
     }
     if (h?.kind !== "body") return;
@@ -119,7 +117,7 @@ export const driveTool: Tool = {
     ed.select(picks);
     if (picks.length === 2) {
       const between = m.joints.filter((j) => (j.a === picks[0] && j.b === picks[1]) || (j.a === picks[1] && j.b === picks[0]));
-      if (between.length === 1) addDriver(ed, between[0].id, picks[0], picks[1]);
+      if (between.length === 1) createDriver(ed, between[0].id, picks[0], picks[1]);
       else if (between.length === 0) {
         ed.flash(t("drive.notJoined"));
         picks = [picks[1]];

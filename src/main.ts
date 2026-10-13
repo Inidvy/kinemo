@@ -9,6 +9,7 @@ import { mountKeys } from "./ui/keys";
 import { mountFeatureTree, mountProperties } from "./ui/panels";
 import { mountDimEditor } from "./ui/dimEditor";
 import { mountWarning } from "./ui/warning";
+import { SliderMotion } from "./ui/sliderMotion";
 import { tools } from "./tools";
 import { t } from "./i18n";
 import { svgIcon, iconPaths } from "./ui/icons";
@@ -25,7 +26,7 @@ async function main() {
   mountCanvas(canvas, ed);
   mountToolbar($("#toolbar"), ed);
   mountFeatureTree($("#left"), ed);
-  mountProperties($("#right"), ed);
+  mountProperties($("#right"), ed, new SliderMotion(ed));
   mountDimEditor($("#canvas-wrap"), ed);
   mountWarning($("#warning"), ed);
   mountKeys(ed);

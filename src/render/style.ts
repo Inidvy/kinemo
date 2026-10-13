@@ -10,6 +10,9 @@ export const colors = {
   /** Other constraints that would also fix an over-constraint. */
   conflictSoft: "#f08a80",
   track: "#8e44ad",
+  pinEdge: "#3b4250",
+  pinDot: "#c9a800",
+  groundPin: "#3b4250",
   selected: "#f28c18",
   hover: "#5aa7ff",
   preview: "#2069e0",
