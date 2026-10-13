@@ -121,127 +121,156 @@ export function bodyLoops(doc: SketchDoc, b: Body): Vec[][] {
   return loops;
 }
 
-function mix(hex: string, k: number, to = 255): string {
-  const n = parseInt(hex.slice(1), 16);
-  const f = (c: number) => Math.round(c + (to - c) * k);
-  return `rgb(${f((n >> 16) & 255)},${f((n >> 8) & 255)},${f(n & 255)})`;
-}
-
 let layer: HTMLCanvasElement | null = null;
 
+/** Fill opacity of a body: see-through, so overlapping bodies stay readable. */
+const FILL_ALPHA = 0.32;
+
+/** Width of a slot, which is also the size of a pin. */
+function slotWidth(doc: SketchDoc, v: View): number {
+  return Math.max(5, doc.settings.barWidth * v.zoom * 0.45);
+}
+
+/**
+ * Bodies as see-through shapes with a solid outline. Each body is painted on
+ * its own layer first, so the parts of one body merge into one shape instead
+ * of darkening where they overlap, and slots are cut clean through it.
+ */
 export function drawBodies(ctx: CanvasRenderingContext2D, ed: Editor, style: BarStyle): void {
-  if (style.alpha >= 1) return paintBodies(ctx, ed, style);
-  // See-through bars: paint them solid on a layer, then lay the layer down
-  // faded, so overlapping parts of a body don't show darker.
+  const doc = ed.doc;
+  const v = ed.view;
+  const w = Math.max(3, doc.settings.barWidth * v.zoom);
+  const hole = slotWidth(doc, v);
+  const slots = slotGeoms(doc, ed.mech.joints);
+  const ground = groundBodies(doc);
   layer ??= document.createElement("canvas");
   if (layer.width !== ctx.canvas.width || layer.height !== ctx.canvas.height) {
     layer.width = ctx.canvas.width;
     layer.height = ctx.canvas.height;
   }
   const lc = layer.getContext("2d")!;
-  lc.setTransform(1, 0, 0, 1, 0, 0);
-  lc.clearRect(0, 0, layer.width, layer.height);
-  lc.setTransform(ctx.getTransform());
-  paintBodies(lc, ed, { ...style, alpha: 1 });
-  ctx.save();
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.globalAlpha = style.alpha;
-  ctx.drawImage(layer, 0, 0);
-  ctx.restore();
-}
+  const clear = () => {
+    lc.setTransform(1, 0, 0, 1, 0, 0);
+    lc.globalCompositeOperation = "source-over";
+    lc.clearRect(0, 0, layer!.width, layer!.height);
+    lc.setTransform(ctx.getTransform());
+    lc.lineCap = "round";
+    lc.lineJoin = "round";
+    lc.setLineDash([]);
+  };
+  const stamp = (alpha: number) => {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(layer!, 0, 0);
+    ctx.restore();
+  };
 
-function paintBodies(ctx: CanvasRenderingContext2D, ed: Editor, style: BarStyle): void {
-  const doc = ed.doc;
-  const v = ed.view;
-  const w = Math.max(3, doc.settings.barWidth * v.zoom);
-  const slots = slotGeoms(doc, ed.mech.joints);
-  const ground = groundBodies(doc);
-  ctx.save();
-  ctx.globalAlpha = style.alpha;
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  ctx.setLineDash([]);
   // Ground first so moving bodies sit on top of it.
   const bodies = Object.values(doc.bodies).sort((a, b) => Number(ground.has(b.id)) - Number(ground.has(a.id)));
   for (const b of bodies) {
     const pose = style.posed ? poseOf(doc, b.id) : IDENTITY;
     const color = bodyColor(doc, b);
-    const fill = mix(color, 0.62);
-    const edge = ed.selection.has(b.id) ? colors.selected : style.hover === b.id ? colors.hover : mix(color, 0.2, 0);
+    const edge = ed.selection.has(b.id) ? colors.selected : style.hover === b.id ? colors.hover : color;
     const geoms = bodyGeoms(doc, b).filter((g) => !g.construction);
+    const slotted = geoms.filter((g) => slots.has(g.id));
     const loops = bodyLoops(doc, b).map((loop) => loop.map((p) => v.toScreen(applyPose(pose, p))));
     const loose = b.members.filter((id) => doc.points[id]).map((id) => v.toScreen(applyPose(pose, doc.points[id])));
-    const plate = (p: Vec[]) => {
-      ctx.beginPath();
-      p.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
-      ctx.closePath();
-    };
-
-    // Outline pass, then fill pass, so the body reads as one merged shape.
-    for (const [ink, width] of [
-      [edge, w + 4],
-      [fill, w],
-    ] as const) {
-      ctx.strokeStyle = ink;
-      ctx.fillStyle = ink;
-      ctx.lineWidth = width;
+    // The body's shape, stroked at a given width.
+    const shape = (width: number) => {
+      lc.lineWidth = width;
       for (const p of loops) {
-        plate(p);
-        ctx.fill();
-        ctx.stroke();
+        lc.beginPath();
+        p.forEach((q, i) => (i ? lc.lineTo(q.x, q.y) : lc.moveTo(q.x, q.y)));
+        lc.closePath();
+        lc.fill();
+        lc.stroke();
       }
       for (const g of geoms) {
-        tracePath(ctx, doc, v, pose, g);
-        ctx.stroke();
+        tracePath(lc, doc, v, pose, g);
+        lc.stroke();
       }
       for (const p of loose) {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, width / 2, 0, Math.PI * 2);
-        ctx.fill();
+        lc.beginPath();
+        lc.arc(p.x, p.y, width / 2, 0, Math.PI * 2);
+        lc.fill();
       }
+    };
+    const cutSlots = (width: number) => {
+      lc.globalCompositeOperation = "destination-out";
+      lc.lineWidth = width;
+      for (const g of slotted) {
+        tracePath(lc, doc, v, pose, g);
+        lc.stroke();
+      }
+      lc.globalCompositeOperation = "source-over";
+    };
+
+    // Fill: the shape with the slots cut out, laid down see-through.
+    clear();
+    lc.fillStyle = lc.strokeStyle = color;
+    shape(w);
+    cutSlots(hole);
+    stamp(style.alpha * FILL_ALPHA);
+
+    // Outline: a ring around the shape and around each slot.
+    clear();
+    lc.fillStyle = lc.strokeStyle = edge;
+    shape(w + 4);
+    lc.globalCompositeOperation = "destination-out";
+    shape(w);
+    lc.globalCompositeOperation = "source-over";
+    lc.lineWidth = hole + 3;
+    for (const g of slotted) {
+      tracePath(lc, doc, v, pose, g);
+      lc.stroke();
     }
-    // Slots: a hole cut along the line, inset from its ends.
-    const hole = Math.max(3, w * 0.42);
-    for (const g of geoms.filter((g) => slots.has(g.id))) {
-      tracePath(ctx, doc, v, pose, g, w * 0.55);
-      ctx.strokeStyle = g.track ? colors.track : edge;
-      ctx.lineWidth = hole + 3;
-      ctx.stroke();
-      tracePath(ctx, doc, v, pose, g, w * 0.55);
-      ctx.strokeStyle = colors.background;
-      ctx.lineWidth = hole;
+    cutSlots(hole);
+    stamp(style.alpha);
+
+    // A dotted line along the middle of each slot: the path the pin follows.
+    ctx.save();
+    ctx.globalAlpha = style.alpha;
+    ctx.strokeStyle = edge;
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([4, 4]);
+    for (const g of slotted) {
+      tracePath(ctx, doc, v, pose, g);
       ctx.stroke();
     }
+    ctx.restore();
   }
-  ctx.restore();
 }
 
-/** Joints as small pins; ground pins are dark. Driven joints get an arrow. */
+/** Pins as yellow discs the width of a slot; fixed and ground pivots are grey. Driven joints get an arrow. */
 export function drawJoints(ctx: CanvasRenderingContext2D, ed: Editor): void {
   const doc = ed.doc;
   const v = ed.view;
   const m = ed.mech;
   const k = m.context(m.current());
-  const r = Math.max(4, doc.settings.barWidth * v.zoom * 0.3);
+  const r = slotWidth(doc, v) / 2;
   const driven = new Set(Object.values(doc.motion.drivers).map((d) => d.joint));
   ctx.save();
   ctx.setLineDash([]);
   for (const j of m.joints) {
     const at = v.toScreen(jointKinds.get(j.kind).anchor(k, j));
-    const ground = j.kind === "pin" && (isGround(doc, j.a) || isGround(doc, j.b));
+    const fixed = j.kind === "anchor" || (j.kind === "pin" && (isGround(doc, j.a) || isGround(doc, j.b)));
     const sel = ed.selection.has(j.id), hov = ed.hover === j.id;
     ctx.beginPath();
     ctx.arc(at.x, at.y, r, 0, Math.PI * 2);
-    ctx.fillStyle = ground ? colors.groundPin : "#ffffff";
+    ctx.fillStyle = fixed ? colors.groundPin : colors.pin;
     ctx.fill();
-    ctx.lineWidth = sel || hov ? 2.5 : 1.6;
-    ctx.strokeStyle = sel ? colors.selected : hov ? colors.hover : colors.pinEdge;
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = fixed ? colors.groundPinEdge : colors.pinEdge;
     ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(at.x, at.y, r * 0.42, 0, Math.PI * 2);
-    ctx.fillStyle = ground ? "#ffffff" : colors.pinDot;
-    ctx.fill();
-    if (driven.has(j.id)) motorArrow(ctx, at, r + 5);
+    if (sel || hov) {
+      ctx.beginPath();
+      ctx.arc(at.x, at.y, r + 2.5, 0, Math.PI * 2);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = sel ? colors.selected : colors.hover;
+      ctx.stroke();
+    }
+    if (driven.has(j.id)) motorArrow(ctx, at, r + 6);
   }
   ctx.restore();
 }

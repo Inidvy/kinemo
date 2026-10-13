@@ -121,6 +121,42 @@ jointKinds.register({
   anchor: (k, j) => k.w(j.refs[0]),
 });
 
+/**
+ * Fixed pivot: a body fixed at one point only turns about it. Made by a Fix
+ * on the body's point, or by a body point coincident with a fixed loose point.
+ * Its first body is the world ("").
+ */
+jointKinds.register({
+  id: "anchor",
+  label: "joint.anchor",
+  unit: "deg",
+  fromConstraint(doc, c, owner) {
+    let p: Id | undefined;
+    if (c.type === "fix") p = c.refs[0];
+    else if (c.type === "coincident" && c.refs.length === 2) {
+      const fixed = (id: Id) => !owner.has(id) && Object.values(doc.constraints).some((f) => f.type === "fix" && f.refs[0] === id);
+      if (fixed(c.refs[0])) p = c.refs[1];
+      else if (fixed(c.refs[1])) p = c.refs[0];
+    }
+    const b = p && owner.get(p);
+    if (!p || !b || isGround(doc, b)) return null;
+    const at = doc.points[p];
+    return { id: c.id, kind: "anchor", a: "", b, refs: [p], data: [at.x, at.y, referenceAngle(doc, owner, b, at)] };
+  },
+  equations(k, j) {
+    const w = k.w(j.refs[0]);
+    return [w.x - j.data![0], w.y - j.data![1]];
+  },
+  measure(k, j) {
+    return wrapPi(j.data![2] + k.angle(j.b)) * DEG;
+  },
+  drive(k, j, value) {
+    return wrapPi((this.measure(k, j) - value) / DEG);
+  },
+  range: () => [-180, 180],
+  anchor: (k, j) => k.w(j.refs[0]),
+});
+
 /** Slot: a point of one body slides along a line of another. */
 jointKinds.register({
   id: "slot",

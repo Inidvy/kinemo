@@ -255,7 +255,7 @@ export class Editor {
   private pruneSelection(): void {
     const d = this.doc;
     for (const id of [...this.selection]) {
-      if (!(id in d.points || id in d.geoms || id in d.constraints)) this.selection.delete(id);
+      if (!(id in d.points || id in d.geoms || id in d.constraints || id in d.bodies || id in d.motion.drivers)) this.selection.delete(id);
     }
   }
 

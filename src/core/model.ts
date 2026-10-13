@@ -73,6 +73,8 @@ export interface Body {
   members: Id[];
   /** Ground bodies never move. */
   ground?: boolean;
+  /** Bar colour (hex); picked from the palette by default. */
+  color?: string;
 }
 
 /** Where a body is in Motion mode: rotation `a` (radians) about the origin, then shift by (x, y). */

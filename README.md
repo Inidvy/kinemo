@@ -51,7 +51,7 @@ Over-constraining is allowed. The newest constraint that causes it is shown in d
 
 ## Bodies and Motion mode
 
-Select geometry and press G to group it into one rigid body. A body with a fixed point (W) is ground automatically; Shift+G makes any body ground. Closed loops of lines in a body are drawn as plates, and lines a slider runs along get a slot cut into them. Joints come from the sketch: wherever geometry of two bodies is coincident (or concentric) they are pinned, and a point of one body on a line or arc of another slides along it. Lines that carry a slider are drawn as slots.
+Select geometry and press G to group it into one rigid body. A body fixed at one point (W) turns about it like a ground pivot; a body fixed at two or more points, or marked with Shift+G, is ground and drawn grey. Closed loops of lines in a body are drawn as see-through plates, lines a slider runs along get a slot with a dotted centre line, and each body's colour can be picked from eight in its properties. Joints come from the sketch: wherever geometry of two bodies is coincident (or concentric) they are pinned, and a point of one body on a line or arc of another slides along it. Lines that carry a slider are drawn as slots.
 
 | Key (Motion) | Action |
 | --- | --- |

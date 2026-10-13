@@ -1,6 +1,6 @@
 import type { Editor } from "../app/editor";
 import type { Body, Driver, Id } from "../core/model";
-import { bodyColor, fixedGround, isGround } from "../motion/bodies";
+import { bodyColor, fixedGround, isGround, PALETTE } from "../motion/bodies";
 import { jointKinds, type Joint } from "../motion/joints";
 import { t } from "../i18n";
 import { icons } from "./icons";
@@ -9,7 +9,7 @@ import type { SliderMotion } from "./sliderMotion";
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
-const bodyName = (ed: Editor, id: Id) => ed.doc.bodies[id]?.name ?? "?";
+const bodyName = (ed: Editor, id: Id) => (id === "" ? t("body.world") : (ed.doc.bodies[id]?.name ?? "?"));
 
 export function jointName(ed: Editor, j: Joint): string {
   return `${t(jointKinds.get(j.kind).label)} · ${bodyName(ed, j.a)} – ${bodyName(ed, j.b)}`;
@@ -66,6 +66,13 @@ export function bodyProps(ed: Editor, b: Body): string {
   return `<div class="prop-head">${swatch(ed, b)}${esc(b.name)}</div>
     <label class="field">${t("panel.name")}<input type="text" data-field="bodyName" data-id="${b.id}" value="${esc(b.name)}"></label>
     <label class="check"><input type="checkbox" data-field="ground" data-id="${b.id}" ${isGround(ed.doc, b.id) ? "checked" : ""} ${fixedGround(ed.doc, b) ? "disabled" : ""}> ${t(fixedGround(ed.doc, b) ? "body.groundFixed" : "body.ground")} (⇧G)</label>
+    ${
+      isGround(ed.doc, b.id)
+        ? ""
+        : `<div class="field">${t("body.color")}<span class="palette">${PALETTE.map(
+            (c) => `<button class="pick${bodyColor(ed.doc, b) === c ? " on" : ""}" data-color="${c}" data-id="${b.id}" style="background:${c}" title="${c}"></button>`,
+          ).join("")}</span></div>`
+    }
     <div class="readout"><span>${t("body.members")}</span><b>${b.members.length}</b></div>
     ${ed.mode === "sketch" ? `<button class="btn danger" data-delete="1">${t("body.ungroup")}</button>` : ""}`;
 }

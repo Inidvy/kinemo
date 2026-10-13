@@ -270,7 +270,7 @@ export class Mechanism {
     let locks = drivers.map((d) => ({ joint: d.joint, value: this.measure(q0, d.joint) }));
     if (!locks.length) {
       // No sliders: keep the first joint to ground where it is.
-      const j = this.joints.find((j) => isGround(this.doc, j.a) || isGround(this.doc, j.b)) ?? this.joints[0];
+      const j = this.joints.find((j) => j.a === "" || isGround(this.doc, j.a) || isGround(this.doc, j.b)) ?? this.joints[0];
       if (j) locks = [{ joint: j.id, value: this.measure(q0, j.id) }];
     }
     const found: number[][] = [];

@@ -85,6 +85,12 @@ export function mountFeatureTree(el: HTMLElement, ed: Editor): void {
 /** Right panel: properties of the selection and the constraints it allows. */
 export function mountProperties(el: HTMLElement, ed: Editor, sliders: SliderMotion): void {
   el.addEventListener("click", (e) => {
+    const pick = (e.target as HTMLElement).closest<HTMLElement>("[data-color]");
+    if (pick) {
+      const id = pick.dataset.id!, color = pick.dataset.color!;
+      ed.change((doc) => (doc.bodies[id].color = color));
+      return;
+    }
     const b = (e.target as HTMLElement).closest<HTMLElement>("[data-apply],[data-delete]");
     if (!b) return;
     if (b.dataset.apply) ed.applyConstraint(b.dataset.apply);

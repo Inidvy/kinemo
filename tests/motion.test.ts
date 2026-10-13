@@ -129,14 +129,26 @@ describe("motion", () => {
 });
 
 describe("bodies", () => {
-  it("treats a body with a fixed point as ground", async () => {
+  it("turns a body fixed at one point about it, and holds one fixed at two", async () => {
     const { groundBodies } = await import("../src/motion/bodies");
     const doc = emptyDoc();
     const a = bar(doc, 0, 0, 10, 0);
-    addConstraint(doc, { type: "fix", refs: [a.p1], data: { x: 0, y: 0 } });
+    const fix = addConstraint(doc, { type: "fix", refs: [a.p1], data: { x: 0, y: 0 } });
     body(doc, "a", [a.id]);
-    expect(groundBodies(doc).has("a")).toBe(true);
-    expect(new Mechanism(doc).moving).toEqual([]);
+    expect(groundBodies(doc).has("a")).toBe(false);
+    const m = new Mechanism(doc);
+    expect(m.joints.map((j) => j.kind)).toEqual(["anchor"]);
+    expect(m.dof()).toBe(1);
+    const r = m.driveTo(fix, 90);
+    expect(r.reached).toBe(true);
+    const tip = applyPose(m.pose(r.q, "a"), doc.points[a.p2]);
+    expect(tip.x).toBeCloseTo(0, 5);
+    expect(tip.y).toBeCloseTo(10, 5);
+    // Documents are immutable snapshots in the app, so change a copy.
+    const doc2 = structuredClone(doc);
+    addConstraint(doc2, { type: "fix", refs: [a.p2], data: { x: 10, y: 0 } });
+    expect(groundBodies(doc2).has("a")).toBe(true);
+    expect(new Mechanism(doc2).moving).toEqual([]);
   });
 
   it("finds a triangle plate even when an edge is split into three lines", async () => {

@@ -17,19 +17,47 @@ export function ownerMap(doc: SketchDoc): Map<Id, Id> {
 }
 
 const groundCache = new WeakMap<SketchDoc, Set<Id>>();
+const fixedCache = new WeakMap<SketchDoc, Map<Id, Id[]>>();
 
 /**
- * Ground bodies never move: the ones marked as ground, and any body with a
- * fixed point or line in the sketch.
+ * For each body, its points that are fixed in the sketch: fixed directly, or
+ * coincident with a fixed point that belongs to no body.
+ */
+export function bodyFixedPoints(doc: SketchDoc): Map<Id, Id[]> {
+  let out = fixedCache.get(doc);
+  if (out) return out;
+  out = new Map();
+  const own = ownerMap(doc);
+  const fixed = new Set(Object.values(doc.constraints).filter((c) => c.type === "fix").map((c) => c.refs[0]));
+  const add = (p: Id) => {
+    const b = own.get(p);
+    if (!b) return;
+    const list = out!.get(b) ?? [];
+    if (!list.includes(p)) list.push(p);
+    out!.set(b, list);
+  };
+  fixed.forEach(add);
+  for (const c of Object.values(doc.constraints)) {
+    if (c.type !== "coincident" || c.refs.length !== 2) continue;
+    const [x, y] = c.refs;
+    if (fixed.has(x) && !own.has(x)) add(y);
+    if (fixed.has(y) && !own.has(y)) add(x);
+  }
+  fixedCache.set(doc, out);
+  return out;
+}
+
+/**
+ * Ground bodies never move: the ones marked as ground, and any body fixed at
+ * two or more places. A body fixed at one point only turns about it instead.
  */
 export function groundBodies(doc: SketchDoc): Set<Id> {
   let set = groundCache.get(doc);
   if (set) return set;
   set = new Set(Object.values(doc.bodies).filter((b) => b.ground).map((b) => b.id));
-  const own = ownerMap(doc);
-  for (const c of Object.values(doc.constraints)) {
-    if (c.type !== "fix") continue;
-    for (const r of c.refs) if (own.has(r)) set.add(own.get(r)!);
+  for (const [b, pts] of bodyFixedPoints(doc)) {
+    const spots = new Set(pts.map((p) => `${doc.points[p].x.toFixed(6)},${doc.points[p].y.toFixed(6)}`));
+    if (spots.size >= 2) set.add(b);
   }
   groundCache.set(doc, set);
   return set;
@@ -68,12 +96,13 @@ export function motionPoint(doc: SketchDoc, owner: Map<Id, Id>, pointId: Id): Ve
   return applyPose(poseOf(doc, owner.get(pointId)), doc.points[pointId]);
 }
 
-/** Bar colours, picked by body order. Ground is always grey. */
-const PALETTE = ["#5aa9f0", "#f5a54a", "#4cc788", "#ef7fb4", "#9f86f0", "#3fc9c4", "#e6c13d", "#f27a64"];
-export const GROUND_COLOR = "#9aa1ad";
+/** Body colours to pick from: strong, so they read through the see-through fill. */
+export const PALETTE = ["#e53935", "#fb8c00", "#fdd835", "#43a047", "#00acc1", "#1e88e5", "#8e24aa", "#d81b60"];
+export const GROUND_COLOR = "#78808c";
 
 export function bodyColor(doc: SketchDoc, b: Body): string {
   if (isGround(doc, b.id)) return GROUND_COLOR;
+  if (b.color) return b.color;
   const i = Object.keys(doc.bodies).indexOf(b.id);
   return PALETTE[i % PALETTE.length];
 }

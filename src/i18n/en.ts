@@ -40,7 +40,9 @@ export const en: Record<string, string> = {
   "body.ground": "Ground (doesn't move)",
   "body.groundTag": "ground",
   "body.fixedTag": "fixed",
-  "body.groundFixed": "Ground (it has a fixed point)",
+  "body.groundFixed": "Ground (fixed at two or more points)",
+  "body.world": "Ground",
+  "body.color": "Colour",
   "body.members": "Items",
   "body.ungroup": "Ungroup",
   "body.none": "Select lines and press G to group them into a body.",
@@ -48,6 +50,7 @@ export const en: Record<string, string> = {
   "hint.ground": "Select a body (or something in it), then press Shift+G.",
 
   "joint.pin": "Pin",
+  "joint.anchor": "Fixed pivot",
   "joint.slot": "Slider",
   "joint.curveSlot": "Curved slider",
 
@@ -65,8 +68,8 @@ export const en: Record<string, string> = {
   "slider.hold": "Hold to keep moving",
 
   "motion.locked": "Locked",
-  "motion.noBodies": "No bodies yet. In Sketch mode, select lines and press G to group them into a body. Fix a point (W) or press Shift+G to make a body the ground.",
-  "motion.noGround": "Nothing is ground yet, so the whole mechanism can float. Fix a point of one body (W), or select it and press Shift+G.",
+  "motion.noBodies": "No bodies yet. In Sketch mode, select lines and press G to group them into a body. Fix one point (W) to make a body turn about it, fix two to hold it still, or press Shift+G to make it ground.",
+  "motion.noGround": "Nothing is ground yet, so the whole mechanism can float. Fix a point (W) for a pivot, or select a body and press Shift+G.",
   "motion.noJoints": "Bodies join where their geometry is coincident or a point sits on another body's line or arc.",
   "motion.noSliders": "Press D, then click two bodies and their joint, or select a joint and add one here.",
   "motion.noFlip": "There is no other way to assemble this mechanism.",
