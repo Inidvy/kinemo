@@ -412,6 +412,7 @@ export function drawBodies(ctx: CanvasRenderingContext2D, ed: Editor, style: Bar
 /** Pins as yellow discs the width of a slot; fixed and ground pivots are grey. Driven joints get an arrow. */
 /** Each joint's letter beside it, so sliders and timeline rows can be matched to joints. */
 export function drawJointLetters(ctx: CanvasRenderingContext2D, ed: Editor): void {
+  if (ed.doc.settings.jointLetters === false) return;
   const m = ed.mech;
   const k = m.context(m.current());
   const v = ed.view;
@@ -420,14 +421,19 @@ export function drawJointLetters(ctx: CanvasRenderingContext2D, ed: Editor): voi
   ctx.font = "600 11px system-ui, sans-serif";
   ctx.textBaseline = "middle";
   ctx.lineJoin = "round";
+  // Stacked pins share a letter: draw it once, highlighted if any of them is selected.
+  const stacks = new Map<string, Joint[]>();
   for (const j of m.joints) {
-    const at = v.toScreen(jointKinds.get(j.kind).anchor(k, j));
     const text = m.letter(j.id);
+    stacks.set(text, [...(stacks.get(text) ?? []), j]);
+  }
+  for (const [text, js] of stacks) {
+    const at = v.toScreen(jointKinds.get(js[0].kind).anchor(k, js[0]));
     const x = at.x + r + 4, y = at.y - r - 4;
     ctx.lineWidth = 3;
     ctx.strokeStyle = "rgba(255,255,255,0.9)";
     ctx.strokeText(text, x, y);
-    ctx.fillStyle = ed.selection.has(j.id) ? colors.selected : "#4a5160";
+    ctx.fillStyle = js.some((j) => ed.selection.has(j.id)) ? colors.selected : "#4a5160";
     ctx.fillText(text, x, y);
   }
   ctx.restore();

@@ -95,18 +95,43 @@ export class Mechanism {
     return out;
   }
 
-  /** A short name for a joint: A, B, … Z, AA, AB, … in the order the joints were made. */
+  /**
+   * A short name for a joint: A, B, … Z, AA, AB, … in the order the joints
+   * were made. Pins stacked on one point (three or more bars pinned
+   * together) share a letter.
+   */
   letter(jointId: Id): string {
     if (!this.letters) {
       this.letters = new Map();
-      this.joints.forEach((j, i) => {
-        let n = i, s = "";
-        do {
-          s = String.fromCharCode(65 + (n % 26)) + s;
-          n = Math.floor(n / 26) - 1;
-        } while (n >= 0);
-        this.letters!.set(j.id, s);
-      });
+      // Pins that share a point are one stack.
+      const stackOf = new Map<Id, Id>();
+      const root = (id: Id): Id => {
+        while (stackOf.has(id) && stackOf.get(id) !== id) id = stackOf.get(id)!;
+        return id;
+      };
+      const pointPin = new Map<Id, Id>();
+      for (const j of this.joints) {
+        stackOf.set(j.id, j.id);
+        if (j.kind !== "pin") continue;
+        for (const p of j.refs) {
+          const other = pointPin.get(p);
+          if (other) stackOf.set(root(j.id), root(other));
+          else pointPin.set(p, j.id);
+        }
+      }
+      const named = new Map<Id, string>();
+      for (const j of this.joints) {
+        const r = root(j.id);
+        if (!named.has(r)) {
+          let n = named.size, s = "";
+          do {
+            s = String.fromCharCode(65 + (n % 26)) + s;
+            n = Math.floor(n / 26) - 1;
+          } while (n >= 0);
+          named.set(r, s);
+        }
+        this.letters.set(j.id, named.get(r)!);
+      }
     }
     return this.letters.get(jointId) ?? "?";
   }

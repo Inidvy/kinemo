@@ -275,6 +275,17 @@ const builtins: Action[] = [
     active: (ed) => ed.doc.settings.solidBars,
   },
   {
+    id: "letters",
+    label: "action.letters",
+    icon: icons.letters,
+    shortcut: "l",
+    shift: false,
+    group: "view",
+    modes: MOTION,
+    run: (ed) => ed.live((doc) => (doc.settings.jointLetters = doc.settings.jointLetters === false)),
+    active: (ed) => ed.doc.settings.jointLetters !== false,
+  },
+  {
     id: "flip",
     label: "action.flip",
     icon: icons.flip,

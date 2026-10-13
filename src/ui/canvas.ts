@@ -7,22 +7,35 @@ import { render } from "../render/renderer";
 import { tools } from "../tools";
 import type { Snap, ToolEvent } from "../tools/types";
 
+/** The canvas draws at least this many pixels per CSS pixel: raised while a video records, so it comes out sharp on any screen. */
+let minPixelRatio = 1;
+let drawNow: () => void = () => {};
+
+/** Change the canvas's least pixel ratio and redraw it at once, so a video starts at the new size. */
+export function setMinPixelRatio(ratio: number): void {
+  minPixelRatio = ratio;
+  drawNow();
+}
+
 /** Wires the canvas to the editor: pointer input, pan/zoom and redraws. */
 export function mountCanvas(canvas: HTMLCanvasElement, ed: Editor): void {
   const ctx = canvas.getContext("2d")!;
   let frame = 0;
+  const draw = () => {
+    const dpr = Math.max(window.devicePixelRatio || 1, minPixelRatio);
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    const pw = Math.round(w * dpr), ph = Math.round(h * dpr);
+    if (canvas.width !== pw || canvas.height !== ph) {
+      canvas.width = pw;
+      canvas.height = ph;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    render(ctx, ed, w, h);
+  };
+  drawNow = draw;
   const redraw = () => {
     cancelAnimationFrame(frame);
-    frame = requestAnimationFrame(() => {
-      const dpr = window.devicePixelRatio || 1;
-      const w = canvas.clientWidth, h = canvas.clientHeight;
-      if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
-        canvas.width = w * dpr;
-        canvas.height = h * dpr;
-      }
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      render(ctx, ed, w, h);
-    });
+    frame = requestAnimationFrame(draw);
   };
   ed.subscribe(redraw);
   ed.redraw = redraw;

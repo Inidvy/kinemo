@@ -40,6 +40,7 @@ export const en: Record<string, string> = {
   "action.makeBody": "Group into a body",
   "action.ground": "Toggle ground",
   "action.bars": "Solid bars",
+  "action.letters": "Show joint letters",
   "action.flip": "Flip",
   "action.resetPose": "Reset",
   "action.mode": "Switch Sketch / Motion",

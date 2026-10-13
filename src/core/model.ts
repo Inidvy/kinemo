@@ -63,6 +63,8 @@ export interface Settings {
   showConstraintIcons: boolean;
   /** Draw bars solid instead of see-through in Sketch mode. */
   solidBars: boolean;
+  /** Draw each joint's letter beside it in Motion mode (default on). */
+  jointLetters?: boolean;
 }
 
 /** A rigid group of sketch geometry. In Motion mode it moves as one bar. */
