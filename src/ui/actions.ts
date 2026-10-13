@@ -245,7 +245,7 @@ const builtins: Action[] = [
         ed.change((doc) => {
           for (const p of pts) {
             const c = ground(doc, p);
-            if (on && !c) addConstraint(doc, { type: "groundPoint", refs: [p], data: { x: doc.points[p].x, y: doc.points[p].y } });
+            if (on && !c) addConstraint(doc, { type: "groundPoint", refs: [p] });
             if (!on && c) delete doc.constraints[c.id];
           }
         });

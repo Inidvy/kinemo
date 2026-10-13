@@ -23,7 +23,11 @@ const migrations: Record<number, (d: Record<string, unknown>) => void> = {
       }
     const cons = Object.values(doc.constraints ?? {});
     const nearBody = (p: string) => owned.has(p) || cons.some((c) => c.type === "coincident" && c.refs.includes(p) && c.refs.some((r) => owned.has(r)));
-    for (const c of cons) if (c.type === "fix" && nearBody(c.refs[0])) c.type = "groundPoint";
+    for (const c of cons)
+      if (c.type === "fix" && nearBody(c.refs[0])) {
+        c.type = "groundPoint";
+        delete c.data;
+      }
   },
 };
 

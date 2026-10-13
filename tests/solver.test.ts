@@ -114,3 +114,12 @@ describe("dragging", () => {
     expect(r.doc.points[b.p2].y).toBeCloseTo(30, 1);
   });
 });
+
+describe("ground pivots", () => {
+  it("don't hold a point in the sketch", () => {
+    const doc = emptyDoc();
+    const l = line(doc, 0, 0, 40, 0);
+    addConstraint(doc, { type: "groundPoint", refs: [l.p1] });
+    expect(solver.solve(doc).dof).toBe(4);
+  });
+});

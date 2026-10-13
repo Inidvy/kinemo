@@ -206,16 +206,10 @@ export const groundPoint: ConstraintType = {
   fromSelection(doc, sel) {
     const { points } = split(doc, sel);
     if (!points.length) return "hint.ground";
-    return points.map((p) => ({ type: "groundPoint", refs: [p], data: { x: doc.points[p].x, y: doc.points[p].y } }));
+    return points.map((p) => ({ type: "groundPoint", refs: [p] }));
   },
-  toPrimitives(doc, c) {
-    const p = c.refs[0];
-    const at = c.data ?? doc.points[p];
-    return [
-      { id: `${c.id}#0`, type: "coordinate_x", p_id: p, x: at.x },
-      { id: `${c.id}#1`, type: "coordinate_y", p_id: p, y: at.y },
-    ];
-  },
+  // Only Motion mode uses it: in the sketch the point stays free to move.
+  toPrimitives: () => [],
   anchor: (doc, c) => P(doc, c.refs[0]),
 };
 
