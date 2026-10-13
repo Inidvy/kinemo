@@ -54,6 +54,8 @@ export class Editor {
 
   private listeners = new Set<() => void>();
   private analysisTimer = 0;
+  /** Counts analyses, so a slow one still running knows a newer one has started. */
+  private analysisRun = 0;
 
   constructor(readonly solver: Solver, doc: SketchDoc = emptyDoc()) {
     this.history = new History(doc);
@@ -68,7 +70,11 @@ export class Editor {
 
   /** The mechanism for the current document (bodies, joints, poses). */
   get mech(): Mechanism {
-    if (this.mechCache?.doc !== this.doc) this.mechCache = { doc: this.doc, mech: new Mechanism(this.doc) };
+    const c = this.mechCache, doc = this.doc;
+    if (c?.doc === doc) return c.mech;
+    // Moving the bodies doesn't change the joints: reuse them.
+    const same = c && c.doc.points === doc.points && c.doc.geoms === doc.geoms && c.doc.constraints === doc.constraints && c.doc.bodies === doc.bodies;
+    this.mechCache = { doc, mech: same ? c.mech.at(doc) : new Mechanism(doc) };
     return this.mechCache.mech;
   }
 
@@ -82,7 +88,7 @@ export class Editor {
       // Put the mechanism together: the sketch may have changed since last time.
       const q = this.mech.assemble();
       const poses = this.mech.poses(q);
-      this.live((doc) => (doc.motion.poses = poses));
+      this.setPoses(poses);
     }
     this.reanalyse();
     this.emit();
@@ -92,7 +98,7 @@ export class Editor {
   motionDrag(drag: MotionDrag): void {
     const m = this.mech;
     const q = m.dragTo(drag);
-    if (q) this.live((doc) => (doc.motion.poses = m.poses(q)));
+    if (q) this.setPoses(m.poses(q));
   }
 
   /** Move a joint to a value (as a slider would); the mechanism follows as far as it can. */
@@ -100,7 +106,7 @@ export class Editor {
     const m = this.mech;
     const others = Object.values(this.doc.motion.drivers).map((x) => x.joint).filter((id) => id !== jointId);
     const r = m.driveTo(jointId, value, others);
-    this.live((doc) => (doc.motion.poses = m.poses(r.q)));
+    this.setPoses(m.poses(r.q));
   }
 
   /** Move a slider; the mechanism follows as far as it can. */
@@ -110,7 +116,7 @@ export class Editor {
     const m = this.mech;
     const others = Object.values(this.doc.motion.drivers).map((x) => x.joint);
     const r = m.driveTo(d.joint, value, others);
-    this.live((doc) => (doc.motion.poses = m.poses(r.q)));
+    this.setPoses(m.poses(r.q));
   }
 
   /** Switch to the other way the mechanism can be assembled. */
@@ -166,6 +172,17 @@ export class Editor {
     const rec = [...this.recent].filter((id) => id in doc.constraints);
     if (rec.length) return rec;
     return [...this.analysis.conflicting].filter((id) => id in doc.constraints);
+  }
+
+  /**
+   * Move the bodies without solving or recording (Motion mode). Only the
+   * poses are new; the rest is shared with the current document, so the
+   * mechanism's joints don't have to be worked out again every frame.
+   */
+  setPoses(poses: SketchDoc["motion"]["poses"]): void {
+    const doc = this.doc;
+    this.history.replace({ ...doc, motion: { ...doc.motion, poses } });
+    this.emit();
   }
 
   /** Live preview during a drag; call `endDrag` to make it undoable. */
@@ -278,6 +295,7 @@ export class Editor {
   /** Work out which geometry is still free; runs after the UI has updated. */
   private reanalyse(): void {
     clearTimeout(this.analysisTimer);
+    const run = ++this.analysisRun;
     this.analysisTimer = window.setTimeout(() => {
       const doc = this.doc;
       const r = this.solver.solve(doc);
@@ -293,18 +311,58 @@ export class Editor {
         const skip = culprits.size ? culprits : fixes;
         solvable = { ...doc, constraints: Object.fromEntries(Object.entries(doc.constraints).filter(([id]) => !skip.has(id))) };
       }
+      const base = this.solver.solve(solvable);
+      // Free geometry is only coloured in Sketch mode, and a fully defined
+      // sketch has none, so skip probing every point in those cases.
+      const probe = this.mode === "sketch" && !(Solver.clean(base) && base.dof === 0);
       this.analysis = {
         mechDof: this.mode === "motion" ? this.mech.dof() : 0,
-        dof: this.solver.solve(solvable).dof,
-        free: this.solver.freePoints(solvable),
-        freeRadii: this.solver.freeRadii(solvable),
+        dof: base.dof,
+        // Filled in by `probeFree` below; until then the last colours stay.
+        free: probe ? this.analysis.free : new Set(),
+        freeRadii: probe ? this.analysis.freeRadii : new Set(),
         conflicting: new Set([...culprits, ...fixes]),
         culprits,
         fixes,
         over,
       };
       this.emit();
+      if (probe) this.probeFree(solvable, run);
     }, 30);
+  }
+
+  /**
+   * Find free points and circles a few at a time between frames: it takes
+   * two solves per point, which on a big sketch would freeze the page for
+   * seconds. Waits while a drag is going on; a newer analysis replaces it.
+   */
+  private probeFree(doc: SketchDoc, run: number): void {
+    const points = this.solver.freePointSteps(doc);
+    const radii = this.solver.freeRadiusSteps(doc);
+    let free: Set<Id> | null = null;
+    const slice = () => {
+      if (run !== this.analysisRun) return;
+      if (this.dragging) {
+        this.analysisTimer = window.setTimeout(slice, 50);
+        return;
+      }
+      const until = performance.now() + 12;
+      while (performance.now() < until) {
+        if (!free) {
+          const r = points.next();
+          if (r.done) free = r.value;
+          continue;
+        }
+        const r = radii.next();
+        if (r.done) {
+          this.analysis = { ...this.analysis, free, freeRadii: r.value };
+          this.emit();
+          return;
+        }
+      }
+      this.analysisTimer = window.setTimeout(slice, 0);
+    };
+    slice();
   }
 
   /** Remove the constraints that make the sketch over-constrained (the culprits). */

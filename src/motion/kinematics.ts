@@ -72,6 +72,14 @@ export class Mechanism {
     this.size = Math.max(10, moving, all / 3) || 100;
   }
 
+  /**
+   * The same mechanism for a document that differs from this one only in
+   * where the bodies are, without working out the joints again.
+   */
+  at(doc: SketchDoc): Mechanism {
+    return Object.assign(Object.create(Mechanism.prototype) as Mechanism, this, { doc });
+  }
+
   /** Current poses as a variable vector. */
   current(): number[] {
     const q: number[] = [];
@@ -119,8 +127,11 @@ export class Mechanism {
     };
   }
 
+  private byId: Map<Id, Joint> | null = null;
+
   joint(id: Id): Joint | undefined {
-    return this.joints.find((j) => j.id === id);
+    if (!this.byId) this.byId = new Map(this.joints.map((j) => [j.id, j]));
+    return this.byId.get(id);
   }
 
   measure(q: number[], jointId: Id): number {
@@ -131,39 +142,87 @@ export class Mechanism {
   /** Degrees of freedom left by the joints at this pose. */
   dof(q: number[] = this.current()): number {
     if (!this.moving.length) return 0;
-    const f = (x: number[]) => this.equations(x, [], []);
     // Central differences: accurate enough that joints which repeat each
     // other (a gear pair on two fixed pins) don't count twice.
-    const f0 = f(q);
-    const J = f0.map(() => new Array<number>(q.length).fill(0));
-    const h = 1e-5;
-    for (let c = 0; c < q.length; c++) {
-      const up = [...q], down = [...q];
-      up[c] += h;
-      down[c] -= h;
-      const a = f(up), b = f(down);
-      for (let i = 0; i < f0.length; i++) J[i][c] = (a[i] - b[i]) / (2 * h);
-    }
+    const { J } = this.jacobian(this.blocks([], []), q, 1e-5, true);
     return q.length - (J.length ? rank(J, 1e-6) : 0);
   }
 
-  private equations(q: number[], extra: ((k: JointContext) => number)[], drive: { joint: Id; value: number }[]): number[] {
-    const k = this.context(q);
-    const out: number[] = [];
+  /** The equations in groups (a joint, a slider, a clamp), each touching only a body or two. */
+  private blocks(extra: ((k: JointContext) => number)[], drive: { joint: Id; value: number }[]): Block[] {
+    const out: Block[] = [];
     for (const j of this.joints) {
       const kind = jointKinds.get(j.kind);
-      out.push(...kind.equations(k, j));
-      if (j.noTurn !== undefined && kind.tangent) {
-        const d = k.angle(j.b) - kind.tangent(k, j) - j.noTurn;
-        out.push(Math.atan2(Math.sin(d), Math.cos(d)) * this.size);
-      }
+      out.push((k) => {
+        const e = [...kind.equations(k, j)];
+        if (j.noTurn !== undefined && kind.tangent) {
+          const d = k.angle(j.b) - kind.tangent(k, j) - j.noTurn;
+          e.push(Math.atan2(Math.sin(d), Math.cos(d)) * this.size);
+        }
+        return e;
+      });
     }
     for (const d of drive) {
       const j = this.joint(d.joint);
-      if (j) out.push(jointKinds.get(j.kind).drive(k, j, d.value));
+      if (j) out.push((k) => [jointKinds.get(j.kind).drive(k, j, d.value)]);
     }
-    for (const e of extra) out.push(e(k));
+    for (const e of extra) out.push((k) => [e(k)]);
     return out;
+  }
+
+  /**
+   * Values and finite-difference Jacobian of the equations. A body's
+   * variables only feed the groups that read that body, so each column
+   * re-evaluates just those groups; every other entry is exactly zero,
+   * as re-evaluating them would give.
+   */
+  private jacobian(blocks: Block[], q: number[], h: number, central = false): { C: number[]; J: number[][] } {
+    const touched: Set<number>[] = [];
+    let seen = new Set<number>();
+    const note = (bid: Id | undefined) => {
+      const i = bid === undefined ? undefined : this.index.get(bid);
+      if (i !== undefined) seen.add(i / 3);
+    };
+    const base = this.context(q);
+    const k0: JointContext = {
+      doc: base.doc,
+      w: (pid) => (note(this.owner.get(pid)), base.w(pid)),
+      angle: (bid) => (note(bid), base.angle(bid)),
+    };
+    const f0: number[][] = [];
+    const offset: number[] = [];
+    let m = 0;
+    for (const b of blocks) {
+      seen = new Set();
+      f0.push(b(k0));
+      touched.push(seen);
+      offset.push(m);
+      m += f0[f0.length - 1].length;
+    }
+    const readers: number[][] = this.moving.map(() => []);
+    touched.forEach((set, bi) => set.forEach((body) => readers[body].push(bi)));
+    const J = Array.from({ length: m }, () => new Array<number>(q.length).fill(0));
+    const qq = [...q];
+    for (let c = 0; c < q.length; c++) {
+      const users = readers[Math.floor(c / 3)];
+      if (!users.length) continue;
+      qq[c] = q[c] + h;
+      const ku = this.context(qq);
+      const up = users.map((bi) => blocks[bi](ku));
+      let down: number[][] | null = null;
+      if (central) {
+        qq[c] = q[c] - h;
+        const kd = this.context(qq);
+        down = users.map((bi) => blocks[bi](kd));
+      }
+      qq[c] = q[c];
+      users.forEach((bi, u) => {
+        const o = offset[bi];
+        const a = up[u], b = down ? down[u] : f0[bi];
+        for (let r = 0; r < a.length; r++) J[o + r][c] = down ? (a[r] - b[r]) / (2 * h) : (a[r] - b[r]) / h;
+      });
+    }
+    return { C: f0.flat(), J };
   }
 
   /** Solve for new poses. Returns null when no pose meets the joints (the caller keeps the last good one). */
@@ -218,32 +277,42 @@ export class Mechanism {
       }
       return r;
     };
-    const cons = (q: number[]) => this.equations(q, extra, drive);
+    const blocks = this.blocks(extra, drive);
+    const cons = (q: number[]) => {
+      const k = this.context(q);
+      return blocks.flatMap((b) => b(k));
+    };
 
     let q = [...start];
     for (let iter = 0; iter < 80; iter++) {
-      const C = cons(q);
-      const J = jacobian(cons, q);
+      const { C, J } = this.jacobian(blocks, q, 1e-7);
       const r = goals(q);
       const Jr = jacobian(goals, q);
       const m = C.length;
       // Gauss-Newton step on the goals, subject to the linearised joints:
       // [JrᵀJr  Jᵀ] [Δ]   [-Jrᵀr]
       // [J     -εI] [μ] = [-C   ]
+      // Each goal touches one or three variables, so JrᵀJr and Jrᵀr are
+      // summed over the non-zero entries only (same sums, same order).
+      const JtJ = Array.from({ length: n }, () => new Array<number>(n).fill(0));
+      const g = new Array<number>(n).fill(0);
+      for (let i = 0; i < r.length; i++) {
+        const row = Jr[i];
+        const nz: number[] = [];
+        for (let a = 0; a < n; a++) if (row[a] !== 0) nz.push(a);
+        for (const a of nz) {
+          for (const b of nz) JtJ[a][b] += row[a] * row[b];
+          g[a] += row[a] * r[i];
+        }
+      }
       const K: number[][] = [];
       const rhs: number[] = [];
       for (let a = 0; a < n; a++) {
         const row = new Array<number>(n + m).fill(0);
-        for (let b = 0; b < n; b++) {
-          let s = 0;
-          for (let i = 0; i < r.length; i++) s += Jr[i][a] * Jr[i][b];
-          row[b] = s + (a === b ? 1e-12 : 0);
-        }
+        for (let b = 0; b < n; b++) row[b] = JtJ[a][b] + (a === b ? 1e-12 : 0);
         for (let i = 0; i < m; i++) row[n + i] = J[i][a];
         K.push(row);
-        let g = 0;
-        for (let i = 0; i < r.length; i++) g += Jr[i][a] * r[i];
-        rhs.push(-g);
+        rhs.push(-g[a]);
       }
       for (let i = 0; i < m; i++) {
         const row = new Array<number>(n + m).fill(0);
@@ -446,6 +515,9 @@ export class Mechanism {
     return this.solve({ start: sketch }) ?? sketch;
   }
 }
+
+/** A group of equations that reads only some bodies. */
+type Block = (k: JointContext) => number[];
 
 /** Forward-difference Jacobian of f at q. */
 function jacobian(f: (q: number[]) => number[], q: number[]): number[][] {
