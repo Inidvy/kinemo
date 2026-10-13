@@ -19,6 +19,11 @@ export interface Joint {
   refs: Id[];
   /** Numbers a kind works out once from the sketch. */
   data?: number[];
+  /**
+   * Set when a slider may only slide, not turn on its pin: the slider keeps
+   * this angle to the path it runs along (radians).
+   */
+  noTurn?: number;
 }
 
 /** What a joint kind can ask of the current poses. */
@@ -52,6 +57,8 @@ export interface JointKind {
   wraps?(j: Joint): boolean;
   /** Where the joint is drawn. */
   anchor(k: JointContext, j: Joint): Vec;
+  /** For a joint that runs along a path: the direction of the path at the joint (world angle). */
+  tangent?(k: JointContext, j: Joint): number;
   /** For a joint that runs along a path: the point of the path at a slider value. */
   along?(k: JointContext, j: Joint, value: number): Vec;
 }
@@ -366,6 +373,12 @@ jointKinds.register({
     return [0, total];
   },
   anchor: (k, j) => k.w(j.refs[0]),
+  tangent(k, j) {
+    const t = trackDirection(k, j);
+    if (t.kind === "line") return angleOf(sub(t.to, t.from));
+    const { piece } = locate(k, j);
+    return angleOf(sub(k.w(j.refs[0]), t.c)) + (piece.kind === "arc" ? piece.dir : 1) * (Math.PI / 2);
+  },
   along(k, j, value) {
     const list = pieces(k, j);
     const total = list.reduce((s, x) => s + x.length, 0);
@@ -421,6 +434,7 @@ jointKinds.register({
   },
   range: (doc, j) => [0, dist(doc.points[j.refs[1]], doc.points[j.refs[2]])],
   anchor: (k, j) => k.w(j.refs[0]),
+  tangent: (k, j) => angleOf(sub(k.w(j.refs[2]), k.w(j.refs[1]))),
   along(k, j, value) {
     const l1 = k.w(j.refs[1]), l2 = k.w(j.refs[2]);
     const l = dist(l1, l2) || 1;
@@ -475,6 +489,7 @@ jointKinds.register({
     return [0, sweep * DEG];
   },
   anchor: (k, j) => k.w(j.refs[0]),
+  tangent: (k, j) => angleOf(sub(k.w(j.refs[0]), k.w(j.refs[1]))) + Math.PI / 2,
   along(k, j, value) {
     const c = k.w(j.refs[1]);
     const r = radius(k.doc, j);
@@ -506,6 +521,11 @@ export function deriveJoints(doc: SketchDoc, owner: Map<Id, Id>): Joint[] {
     for (const kind of jointKinds.all()) {
       const j = kind.fromConstraint(doc, c, owner);
       if (j) {
+        // A slider set to slide only keeps its angle to the path, as sketched.
+        if (c.data?.noTurn && kind.tangent) {
+          const sketched: JointContext = { doc, w: (id) => doc.points[id], angle: () => 0 };
+          j.noTurn = -kind.tangent(sketched, j);
+        }
         out.push(j);
         break;
       }

@@ -48,9 +48,27 @@ export class Mechanism {
       .filter((b) => !isGround(doc, b.id))
       .map((b) => b.id);
     this.moving.forEach((id, i) => this.index.set(id, i * 3));
-    const pts = Object.values(doc.points);
-    const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
-    this.size = pts.length ? Math.max(10, Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys))) : 100;
+    // Size of the parts that move, from their outline: an arc's centre can be
+    // far away (a gentle curve) and would make the mechanism seem huge, so
+    // the solver would take steps far too big for it.
+    const outline = (ids: Id[]) =>
+      ids.flatMap((id) => {
+        const g = doc.geoms[id];
+        if (!g) return doc.points[id] ? [doc.points[id]] : [];
+        if (g.kind === "line") return [doc.points[g.p1], doc.points[g.p2]];
+        if (g.kind === "arc") return [doc.points[g.s], doc.points[g.e]];
+        const c = doc.points[g.c];
+        return [{ x: c.x - g.r, y: c.y - g.r }, { x: c.x + g.r, y: c.y + g.r }];
+      });
+    const extent = (pts: Vec[]) => {
+      if (pts.length < 2) return 0;
+      const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+      return Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+    };
+    // Mostly the moving parts, but not much smaller than the whole drawing.
+    const moving = extent(outline(this.moving.flatMap((id) => doc.bodies[id].members)));
+    const all = extent(outline(Object.values(doc.bodies).flatMap((b) => b.members)));
+    this.size = Math.max(10, moving, all / 3) || 100;
   }
 
   /** Current poses as a variable vector. */
@@ -115,7 +133,14 @@ export class Mechanism {
   private equations(q: number[], extra: ((k: JointContext) => number)[], drive: { joint: Id; value: number }[]): number[] {
     const k = this.context(q);
     const out: number[] = [];
-    for (const j of this.joints) out.push(...jointKinds.get(j.kind).equations(k, j));
+    for (const j of this.joints) {
+      const kind = jointKinds.get(j.kind);
+      out.push(...kind.equations(k, j));
+      if (j.noTurn !== undefined && kind.tangent) {
+        const d = k.angle(j.b) - kind.tangent(k, j) - j.noTurn;
+        out.push(Math.atan2(Math.sin(d), Math.cos(d)) * this.size);
+      }
+    }
     for (const d of drive) {
       const j = this.joint(d.joint);
       if (j) out.push(jointKinds.get(j.kind).drive(k, j, d.value));

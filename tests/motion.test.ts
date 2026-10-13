@@ -195,6 +195,32 @@ describe("tracks", () => {
     expect(p.y).toBeCloseTo(0, 3);
   });
 
+  it("lets a slider only slide when it is set not to turn", () => {
+    // A rounded corner: the block turns with the track as it goes round.
+    const doc = emptyDoc();
+    const a = bar(doc, 0, 0, 30, 0), b = bar(doc, 40, 10, 40, 40);
+    const c = addPoint(doc, 30, 10), s0 = addPoint(doc, 30, 0), e0 = addPoint(doc, 40, 10);
+    const arc = addGeom<Arc>(doc, { kind: "arc", c, s: s0, e: e0 });
+    for (const id of [a.id, b.id, arc]) doc.geoms[id].track = true;
+    addConstraint(doc, { type: "coincident", refs: [a.p2, s0] });
+    addConstraint(doc, { type: "coincident", refs: [e0, b.p1] });
+    const block = bar(doc, 10, 0, 10, 5);
+    const joint = addConstraint(doc, { type: "onCurve", refs: [block.p1, a.id] });
+    doc.constraints[joint].data = { noTurn: 1 };
+    body(doc, "rail", [a.id, arc, b.id], true);
+    body(doc, "block", [block.id]);
+    const m = new Mechanism(doc);
+    expect(m.dof()).toBe(1);
+    const r = m.driveTo(joint, 50);
+    expect(r.reached).toBe(true);
+    expect(m.pose(r.q, "block").a).toBeCloseTo(Math.PI / 2, 4);
+    // A block that can't turn stops at a sharp corner.
+    const l = lTrack();
+    l.doc.constraints[l.joint].data = { noTurn: 1 };
+    const ml = new Mechanism(l.doc);
+    expect(ml.driveTo(l.joint, 70).reached).toBe(false);
+  });
+
   it("keeps a single track line as a plain slot", () => {
     const doc = emptyDoc();
     const a = bar(doc, 0, 0, 50, 0);

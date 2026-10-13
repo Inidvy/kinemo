@@ -56,6 +56,7 @@ export const en: Record<string, string> = {
   "joint.anchor": "Fixed pivot",
   "joint.slot": "Slider",
   "joint.track": "Track",
+  "joint.canTurn": "Turns on its pin (untick to only slide)",
   "joint.gear": "Gear",
   "joint.rack": "Rack",
   "joint.curveSlot": "Curved slider",

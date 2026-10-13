@@ -108,6 +108,16 @@ export function mountProperties(el: HTMLElement, ed: Editor, sliders: SliderMoti
     } else if (field === "bodyName") {
       const name = input.value.trim();
       if (name) ed.change((doc) => (doc.bodies[id].name = name));
+    } else if (field === "canTurn") {
+      // A slider joint either turns on its pin as it slides, or only slides.
+      ed.change((doc) => {
+        const c = doc.constraints[id];
+        const data = { ...(c.data ?? {}) };
+        if (input.checked) delete data.noTurn;
+        else data.noTurn = 1;
+        c.data = Object.keys(data).length ? data : undefined;
+        if (!c.data) delete c.data;
+      });
     } else if (field === "ground") {
       ed.change((doc) => (doc.bodies[id].ground = input.checked));
     } else if (field === "barWidth") {

@@ -68,7 +68,8 @@ export class SliderMotion {
     if (!j) return null;
     const kind = jointKinds.get(j.kind);
     const [lo, hi] = kind.range(this.ed.doc, j);
-    return { deg: kind.unit === "deg", size: this.ed.mech.size, period: kind.wraps?.(j) ? hi - lo : 0 };
+    // A long track should not take ages to run along, so speeds follow the slider's span too.
+    return { deg: kind.unit === "deg", size: Math.max(this.ed.mech.size, (hi - lo) / 5), period: kind.wraps?.(j) ? hi - lo : 0 };
   }
 
   private tick(now: number) {

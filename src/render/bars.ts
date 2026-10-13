@@ -433,7 +433,17 @@ export function drawJoints(ctx: CanvasRenderingContext2D, ed: Editor): void {
       continue;
     }
     ctx.beginPath();
-    ctx.arc(at.x, at.y, r, 0, Math.PI * 2);
+    const kind = jointKinds.get(j.kind);
+    if (j.noTurn !== undefined && kind.tangent) {
+      // A slider that only slides: a square block lined up with its path.
+      const a = -kind.tangent(k, j);
+      const c = Math.cos(a) * r, s = Math.sin(a) * r;
+      ctx.moveTo(at.x + c - s, at.y + s + c);
+      ctx.lineTo(at.x - c - s, at.y - s + c);
+      ctx.lineTo(at.x - c + s, at.y - s - c);
+      ctx.lineTo(at.x + c + s, at.y + s - c);
+      ctx.closePath();
+    } else ctx.arc(at.x, at.y, r, 0, Math.PI * 2);
     ctx.fillStyle = fixed ? colors.groundPin : colors.pin;
     ctx.fill();
     ctx.lineWidth = 1;
