@@ -399,3 +399,54 @@ describe("fix and ground", () => {
     expect(Object.values(up.constraints).map((c) => c.type)).toEqual(["groundPoint", "fix"]);
   });
 });
+
+describe("large mechanisms", () => {
+  it("works out the same Jacobian as re-evaluating every equation", async () => {
+    const { ladder } = await import("../bench/ladder");
+    const { doc, crank } = ladder(6);
+    const m = new Mechanism(doc) as unknown as {
+      blocks(extra: unknown[], drive: { joint: Id; value: number }[]): ((k: unknown) => number[])[];
+      jacobian(blocks: ((k: unknown) => number[])[], q: number[], h: number, central?: boolean): { C: number[]; J: number[][] };
+      context(q: number[]): unknown;
+      current(): number[];
+    };
+    const q = m.current().map((v, i) => v + 0.01 * Math.sin(i));
+    const blocks = m.blocks([], [{ joint: crank, value: 80 }]);
+    const f = (x: number[]) => blocks.flatMap((b) => b(m.context(x)));
+    for (const central of [false, true]) {
+      const h = central ? 1e-5 : 1e-7;
+      const { C, J } = m.jacobian(blocks, q, h, central);
+      expect(C).toEqual(f(q));
+      q.forEach((_, c) => {
+        const up = [...q], down = [...q];
+        up[c] += h;
+        down[c] -= h;
+        const a = f(up), b = central ? f(down) : f(q);
+        a.forEach((v, r) => expect(J[r][c]).toBe(central ? (v - b[r]) / (2 * h) : (v - b[r]) / h));
+      });
+    }
+  });
+
+  it("drives a chain of 100 joints and keeps them together", async () => {
+    const { ladder } = await import("../bench/ladder");
+    const { doc, crank } = ladder(34);
+    const m = new Mechanism(doc);
+    expect(m.joints.length).toBe(100);
+    expect(m.dof()).toBe(1);
+    const r = m.driveTo(crank, m.measure(m.current(), crank) - 10);
+    expect(r.reached).toBe(true);
+    jointsHold(m, r.q);
+  });
+
+  it("reuses the joints for a document that only moved the bodies", () => {
+    const { doc, pins } = fourBar();
+    const m = new Mechanism(doc);
+    const q = m.driveTo(pins[0], 60).q;
+    const moved = { ...doc, motion: { ...doc.motion, poses: m.poses(q) } };
+    const m2 = m.at(moved);
+    expect(m2.joints).toBe(m.joints);
+    expect(m2.doc).toBe(moved);
+    expect(m.doc).toBe(doc);
+    expect(m2.measure(m2.current(), pins[0])).toBeCloseTo(60, 5);
+  });
+});

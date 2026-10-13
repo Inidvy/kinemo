@@ -78,7 +78,7 @@ export async function exportGif(ed: Editor, player: Player, progress: (done: num
     ed.view.zoom = view.zoom;
     ed.view.origin = view.origin;
     // Put the mechanism back as it was: making the GIF isn't an edit.
-    ed.live((d) => (d.motion.poses = before));
+    ed.setPoses(before);
     ed.endDrag();
     player.time = time0;
     ed.setTool(tool);

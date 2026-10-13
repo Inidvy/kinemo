@@ -121,7 +121,7 @@ export class Player {
     if (!targets.length) return ed.emit();
     const m = ed.mech;
     const r = m.driveAll(targets);
-    ed.live((d) => (d.motion.poses = m.poses(r.q)));
+    ed.setPoses(m.poses(r.q));
   }
 
   /** Move the playhead (not while playing) and pose the mechanism there. */
