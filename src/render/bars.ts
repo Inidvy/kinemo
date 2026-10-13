@@ -328,6 +328,7 @@ export function drawBodies(ctx: CanvasRenderingContext2D, ed: Editor, style: Bar
   const slots = slotGeoms(doc, ed.mech.joints);
   const ground = groundBodies(doc);
   const teeth = teethFor(doc, ed.mech.joints);
+  const discs = discCircles(ed.mech.joints);
 
   // Ground first so moving bodies sit on top of it.
   const bodies = Object.values(doc.bodies).sort((a, b) => Number(ground.has(b.id)) - Number(ground.has(a.id)));
@@ -346,6 +347,8 @@ export function drawBodies(ctx: CanvasRenderingContext2D, ed: Editor, style: Bar
       ...loops.map((p) => [p]),
       ...geoms.map((g) => {
         const tt = teeth.get(g.id);
+        // A cam or roller is a solid disc.
+        if (!tt && g.kind === "circle" && discs.has(g.id)) return disc(v.toScreen(applyPose(pose, doc.points[g.c])), g.r * v.zoom + width / 2);
         if (!tt) return geomPart(doc, v, pose, g, width);
         // Gears and racks: their toothed outline (stroked for the outline ring).
         const polys = teethPolys(doc, g, tt, 0, doc.settings.barWidth * 0.8);
@@ -420,7 +423,7 @@ export function drawJoints(ctx: CanvasRenderingContext2D, ed: Editor): void {
     const at = v.toScreen(jointKinds.get(j.kind).anchor(k, j));
     const fixed = j.kind === "anchor" || (j.kind === "pin" && (isGround(doc, j.a) || isGround(doc, j.b)));
     const sel = ed.selection.has(j.id), hov = ed.hover === j.id;
-    if (j.kind === "gear" || j.kind === "rack") {
+    if (j.kind === "gear" || j.kind === "rack" || j.kind === "cam") {
       // Where gears mesh: no pin, just a mark when it is picked or pointed at.
       if (sel || hov) {
         ctx.beginPath();
@@ -534,6 +537,11 @@ function motorArrow(ctx: CanvasRenderingContext2D, at: Vec, r: number) {
   ctx.fill();
 }
 
+/** Circles drawn and picked as solid discs: gears, pinions, cams and rollers. */
+function discCircles(joints: Joint[]): Set<Id> {
+  return new Set(joints.flatMap((j) => (j.kind === "gear" ? j.refs.slice(0, 2) : j.kind === "rack" ? [j.refs[1]] : j.kind === "cam" ? j.refs.slice(0, 2) : [])));
+}
+
 /** What is under the cursor in Motion mode: a joint, then the top-most body. */
 export function motionHit(ed: Editor, s: Vec): { kind: "joint"; id: Id } | { kind: "body"; id: Id } | null {
   const doc = ed.doc;
@@ -546,7 +554,7 @@ export function motionHit(ed: Editor, s: Vec): { kind: "joint"; id: Id } | { kin
   }
   const half = Math.max(6, (doc.settings.barWidth * v.zoom) / 2 + 2);
   const bodies = Object.values(doc.bodies).sort((a, b) => Number(isGround(doc, a.id)) - Number(isGround(doc, b.id)));
-  const discs = new Set(m.joints.flatMap((j) => (j.kind === "gear" ? j.refs.slice(0, 2) : j.kind === "rack" ? [j.refs[1]] : [])));
+  const discs = discCircles(m.joints);
   for (const b of bodies) if (bodyDistance(doc, v, b, s, discs) <= half) return { kind: "body", id: b.id };
   return null;
 }

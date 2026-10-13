@@ -8,6 +8,7 @@ import { downloadDoc, pickFile } from "../io/file";
 import { icons, constraintIcon } from "./icons";
 import { pendingConstraint, startConstraintPick } from "../tools/constraintPick";
 import { setTool, switchMode } from "./toolbar";
+import { timelinePlayer } from "./timeline";
 
 export interface Action {
   id: string;
@@ -215,6 +216,8 @@ const builtins: Action[] = [
       if (!ed.flip()) ed.flash(t("motion.noFlip"));
     },
   },
+  { id: "keyframe", label: "timeline.key", icon: icons.key, shortcut: "k", modes: MOTION, run: () => timelinePlayer()?.key() },
+  { id: "play", label: "timeline.play", icon: icons.play, shortcut: " ", modes: MOTION, run: () => timelinePlayer()?.toggle() },
   { id: "resetPose", label: "action.resetPose", icon: icons.reset, shortcut: "r", shift: false, group: "motion", modes: MOTION, run: (ed) => ed.resetPose() },
   { id: "mode", label: "action.mode", icon: icons.motion, shortcut: "tab", run: (ed) => switchMode(ed, ed.mode === "sketch" ? "motion" : "sketch") },
 ];

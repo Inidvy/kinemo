@@ -3,10 +3,12 @@ import { arcRadius, geomPoints, type Geometry, type Id, type Vec } from "../core
 import { add, angleOf, norm, perp, scale, sub } from "../core/geom";
 import { tools } from "../tools";
 import { colors } from "./style";
-import { ICON, layoutDims, layoutIcons, linearOffset, type DimLayout } from "./layout";
+import { ICON, isWatched, layoutDims, layoutIcons, linearOffset, type DimLayout } from "./layout";
 import type { View } from "./view";
 import { drawConstraintIcon } from "../ui/icons";
 import { drawBodies, drawJoints, drawLooseGeometry } from "./bars";
+import { posedDoc } from "../motion/bodies";
+import { drawTraces } from "./traces";
 
 /** Draws the sketch. Stateless: everything comes from the editor. */
 export function render(ctx: CanvasRenderingContext2D, ed: Editor, w: number, h: number): void {
@@ -21,7 +23,11 @@ export function render(ctx: CanvasRenderingContext2D, ed: Editor, w: number, h: 
     // Motion mode: no constraints or dimensions, just bars, slots and joints.
     drawLooseGeometry(ctx, ed);
     drawBodies(ctx, ed, { posed: true, alpha: 1, hover: ed.hover });
+    drawTraces(ctx, ed);
     drawJoints(ctx, ed);
+    // Watched dimensions, measured where the bodies are now.
+    const posed = posedDoc(doc);
+    for (const d of layoutDims(posed, v, true)) drawDimension(ctx, v, d, ed.selection.has(d.cid), ed.hover === d.cid, null, colors.watch);
     tools.find(ed.tool)?.overlay?.({ ctx, ed });
     ctx.restore();
     return;
@@ -66,7 +72,7 @@ export function render(ctx: CanvasRenderingContext2D, ed: Editor, w: number, h: 
 
   for (const d of layoutDims(doc, v)) {
     const c = doc.constraints[d.cid];
-    drawDimension(ctx, v, d, ed.selection.has(c.id), ed.hover === c.id, badCons(c.id));
+    drawDimension(ctx, v, d, ed.selection.has(c.id), ed.hover === c.id, badCons(c.id), isWatched(c) ? colors.watch : undefined);
   }
 
   if (doc.settings.showConstraintIcons) {

@@ -3,6 +3,7 @@ import { Solver } from "../src/solver/solver";
 import { addConstraint, addGeom, addPoint, emptyDoc, type Line, type SketchDoc } from "../src/core/model";
 import { constraintTypes } from "../src/constraints";
 import { dist } from "../src/core/geom";
+import { measured } from "../src/render/layout";
 
 let solver: Solver;
 beforeAll(async () => {
@@ -24,6 +25,19 @@ function apply(doc: SketchDoc, type: string, sel: string[]) {
 }
 
 describe("solver", () => {
+  it("only measures a watched dimension", () => {
+    const doc = emptyDoc();
+    const l = line(doc, 0, 0, 40, 5);
+    apply(doc, "distance", [l.id]);
+    const c = Object.values(doc.constraints).find((x) => x.type === "distance")!;
+    c.value = 100;
+    c.data = { watch: 1 };
+    const r = solver.solve(doc);
+    expect(r.ok).toBe(true);
+    expect(dist(r.doc.points[l.p1], r.doc.points[l.p2])).toBeCloseTo(dist({ x: 0, y: 0 }, { x: 40, y: 5 }), 6);
+    expect(measured(constraintTypes.get("distance").shape!(r.doc, c))).toBeCloseTo(Math.hypot(40, 5), 6);
+  });
+
   it("makes a line horizontal and sets its length", () => {
     const doc = emptyDoc();
     const l = line(doc, 0, 0, 40, 5);

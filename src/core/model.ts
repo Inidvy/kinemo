@@ -95,10 +95,30 @@ export interface Driver {
   keys?: [string, string];
 }
 
+/** A slider value at a time on the timeline. */
+export interface Keyframe {
+  /** Seconds from the start of the clip. */
+  t: number;
+  v: number;
+  /** The segment from this key to the next runs at a steady speed instead of easing. */
+  linear?: boolean;
+}
+
+export interface Timeline {
+  /** Clip length in seconds. */
+  length: number;
+  mode: "once" | "loop" | "pingpong";
+  /** Keyframes per slider, in time order. */
+  keys: Record<Id, Keyframe[]>;
+}
+
 export interface MotionState {
   /** Missing bodies sit where they were sketched. */
   poses: Record<Id, Pose>;
   drivers: Record<Id, Driver>;
+  /** Points whose path is drawn in Motion mode. */
+  traces?: Id[];
+  timeline?: Timeline;
 }
 
 export interface SketchDoc {
@@ -220,6 +240,9 @@ export function pruneBodies(doc: SketchDoc): void {
   for (const d of Object.values(doc.motion.drivers)) {
     if (!doc.constraints[d.joint] || !doc.bodies[d.a] || !doc.bodies[d.b]) delete doc.motion.drivers[d.id];
   }
+  const keys = doc.motion.timeline?.keys;
+  if (keys) for (const id of Object.keys(keys)) if (!doc.motion.drivers[id]) delete keys[id];
+  if (doc.motion.traces) doc.motion.traces = doc.motion.traces.filter((id) => id in doc.points);
 }
 
 export function cloneDoc(doc: SketchDoc): SketchDoc {

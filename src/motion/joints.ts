@@ -557,8 +557,10 @@ jointKinds.register({
   label: "joint.gear",
   unit: "deg",
   fromConstraint(doc, c, owner) {
-    if (c.type !== "tangent" || c.refs.length !== 2) return null;
+    if (c.type !== "tangent" || c.refs.length !== 2 || c.data?.cam) return null;
     const [g1, g2] = c.refs;
+    // Gears are whole circles; a circle against an arc is a cam.
+    if (doc.geoms[g1]?.kind !== "circle" || doc.geoms[g2]?.kind !== "circle") return null;
     const ra = curveRadius(doc, g1), rb = curveRadius(doc, g2);
     if (!ra || !rb) return null;
     const a = owner.get(g1), b = owner.get(g2);
@@ -609,7 +611,7 @@ jointKinds.register({
   label: "joint.rack",
   unit: "mm",
   fromConstraint(doc, c, owner) {
-    if (c.type !== "tangent" || c.refs.length !== 2) return null;
+    if (c.type !== "tangent" || c.refs.length !== 2 || c.data?.cam) return null;
     const [lid, cid] = c.refs;
     const l = doc.geoms[lid];
     const r = curveRadius(doc, cid);
@@ -657,5 +659,104 @@ jointKinds.register({
     const len = Math.hypot(u.x, u.y) || 1;
     // From the centre straight to the rack.
     return { x: p.x + (u.y / len) * side * r, y: p.y - (u.x / len) * side * r };
+  },
+});
+
+// ------------------------------------------------------------------- cams
+
+/**
+ * Cam and follower: a circle (the follower's roller) of one body kept
+ * touching a line, arc or circle (the cam) of another. Unlike gears the two
+ * slide on each other, so the follower can turn freely. A circle against an
+ * arc is always a cam; gear and rack pairs become cams when set not to mesh.
+ *
+ * refs: [cam curve, follower circle, follower centre]; data: [follower r, side, whole circle].
+ * side: for a line, which side the follower is on (+1 left); for an arc or
+ * circle, +1 outside it, -1 inside.
+ */
+jointKinds.register({
+  id: "cam",
+  label: "joint.cam",
+  unit: "deg",
+  fromConstraint(doc, c, owner) {
+    if (c.type !== "tangent" || c.refs.length !== 2) return null;
+    let [camId, folId] = c.refs;
+    // The follower is the circle; if both are circles, the smaller one.
+    const kind = (id: Id) => doc.geoms[id]?.kind;
+    if (kind(folId) !== "circle" || (kind(camId) === "circle" && curveRadius(doc, camId) < curveRadius(doc, folId))) [camId, folId] = [folId, camId];
+    if (kind(folId) !== "circle" || !kind(camId)) return null;
+    const cam = doc.geoms[camId], fol = doc.geoms[folId];
+    if (fol.kind !== "circle") return null;
+    const a = owner.get(camId), b = owner.get(folId);
+    if (!a || !b || a === b) return null;
+    if (cam.kind !== "arc" && !c.data?.cam) return null;
+    const p = doc.points[fol.c];
+    let side: number;
+    if (cam.kind === "line") side = cross(sub(doc.points[cam.p2], doc.points[cam.p1]), sub(p, doc.points[cam.p1])) >= 0 ? 1 : -1;
+    else side = dist(p, doc.points[cam.c]) >= curveRadius(doc, camId) ? 1 : -1;
+    return { id: c.id, kind: "cam", a, b, refs: [camId, folId, fol.c], data: [fol.r, side, cam.kind === "circle" ? 1 : 0] };
+  },
+  equations(k, j) {
+    const [r, side] = j.data!;
+    const g = k.doc.geoms[j.refs[0]];
+    const p = k.w(j.refs[2]);
+    if (g.kind === "line") {
+      const l1 = k.w(g.p1), l2 = k.w(g.p2);
+      const u = sub(l2, l1);
+      return [cross(u, sub(p, l1)) / (Math.hypot(u.x, u.y) || 1) - side * r];
+    }
+    return [dist(p, k.w(g.c)) - (curveRadius(k.doc, g.id) + side * r)];
+  },
+  overLimit(k, j) {
+    const g = k.doc.geoms[j.refs[0]];
+    if (g.kind === "circle") return null;
+    const p = k.w(j.refs[2]);
+    if (g.kind === "line") {
+      const l1 = k.w(g.p1), l2 = k.w(g.p2);
+      const u = sub(l2, l1);
+      const len = Math.hypot(u.x, u.y) || 1;
+      const s = dot(sub(p, l1), u) / len;
+      return s < 0 ? s : s > len ? s - len : null;
+    }
+    // On an arc: keep the contact point within the arc.
+    const c = k.w(g.c);
+    const local = angleOf(sub(p, c)) - k.angle(j.a);
+    const s = angleOf(sub(k.doc.points[g.s], k.doc.points[g.c])), e = angleOf(sub(k.doc.points[g.e], k.doc.points[g.c]));
+    if (angleInSweep(local, s, e)) return null;
+    const ds = wrapPi(local - s), de = wrapPi(local - e);
+    return (Math.abs(ds) < Math.abs(de) ? ds : de) * curveRadius(k.doc, g.id);
+  },
+  measure(k, j) {
+    const g = k.doc.geoms[j.refs[0]];
+    const p = k.w(j.refs[2]);
+    if (g.kind === "line") {
+      const l1 = k.w(g.p1), u = sub(k.w(g.p2), l1);
+      return dot(sub(p, l1), u) / (Math.hypot(u.x, u.y) || 1);
+    }
+    return wrapPi(angleOf(sub(p, k.w(g.c))) - k.angle(j.a)) * DEG;
+  },
+  drive(k, j, value) {
+    const g = k.doc.geoms[j.refs[0]];
+    if (g.kind === "line") return this.measure(k, j) - value;
+    return wrapPi((this.measure(k, j) - value) / DEG) * curveRadius(k.doc, g.id);
+  },
+  range(doc, j) {
+    const g = doc.geoms[j.refs[0]];
+    if (g.kind === "line") return [0, dist(doc.points[g.p1], doc.points[g.p2])];
+    return [-180, 180];
+  },
+  wraps: (j) => j.data![2] > 0,
+  anchor(k, j) {
+    const [r, side] = j.data!;
+    const g = k.doc.geoms[j.refs[0]];
+    const p = k.w(j.refs[2]);
+    if (g.kind === "line") {
+      const l1 = k.w(g.p1), u = sub(k.w(g.p2), l1);
+      const len = Math.hypot(u.x, u.y) || 1;
+      return { x: p.x + (u.y / len) * side * r, y: p.y - (u.x / len) * side * r };
+    }
+    const c = k.w(g.c);
+    const d = dist(p, c) || 1;
+    return { x: p.x - ((p.x - c.x) / d) * side * r, y: p.y - ((p.y - c.y) / d) * side * r };
   },
 });

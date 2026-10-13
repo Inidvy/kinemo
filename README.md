@@ -2,7 +2,7 @@
 
 A browser app for designing 2D mechanisms. Sketch with CAD-style constraints, group lines into rigid bodies, join them with joints, then drive the mechanism with sliders, by dragging, or with a keyframe timeline.
 
-This is step 2 of 4: the constraint sketcher, bodies, joints and Motion mode. Tracks, gears and cams come in step 3; the timeline and path tracing in step 4.
+All four build steps are in: the constraint sketcher; bodies, joints and Motion mode; tracks, gears and cams; and the keyframe timeline, path tracing and live dimensions.
 
 ## Run it
 
@@ -62,10 +62,21 @@ Select geometry and press G to group it into one rigid body. A body fixed at one
 | Shift+G | Toggle ground |
 | ← → ↑ ↓ | Hold to move the first and second slider (each slider's keys can be changed in its panel, also to a combination like 1 + ←) |
 | Del | Delete the selected joint's slider |
+| T | Trace path: click a point of a bar to draw the path it follows |
+| K | Set keyframes at the playhead |
+| Space | Play or pause the timeline |
 
 Sliders sit in the right panel, and you can drag them and the bars together. Dragging a joint moves its body, so a slider joint runs along its slot. A driven slider joint shows an arrow along its slot. Lines and arcs of one body tagged as track (K) that join end to end form one track: a pin put on any of them runs along the whole chain, round corners, and stops at its ends (or goes round and round if the track is closed). A slider joint turns on its pin as it slides; untick "Turns on its pin" in the joint's properties (Motion mode) to make it only slide, so the slider keeps lined up with its path.
 
 Gears: make two circles (or arcs) in different bodies tangent (T) and they mesh as gears: they roll on each other, turning the other way by the ratio of their sizes, or the same way when one sits inside the other (a ring gear). Pin each gear's centre to put it on an axle. A line tangent to a circle of another body is a rack and pinion. Gears and racks are drawn with teeth.
+
+Cams: untick "Meshes as gears" on a tangent between circles, or a line and a circle, and the follower slides on the cam instead of rolling with it. A circle tangent to an arc is always a cam. A roller (a circle) follows a cam's outline at its radius.
+
+Live dimensions: tick "Watch" on any dimension. It stops setting the sketch and only measures; in Motion mode it shows in teal on the canvas and under "Watched" in the left panel, updating as you drag, slide or play.
+
+Path tracing: with the Trace tool (T), click a point of a bar, or tick "Trace path" on a joint. Its path over a whole cycle is drawn: the timeline clip if it has keys, otherwise the first slider over its range (a full turn for a crank).
+
+Timeline: in Motion mode a timeline sits above the tabs, with a row per slider. Move sliders and press K to set keys (◆) at the playhead for the sliders you moved (and those that already have keys). Space plays. Segments ease in and out; right-click a key or segment for a steady speed. Drag keys to retime them, double-click to delete, or select one to type its time and value (a crank can be keyed past 360° for full turns). The clip has a length, and plays once, loops or ping-pongs. Sliders without keys stay free while it plays.
 
 Sliders ease smoothly to a new value. A slider for a joint that goes round (a crank, a full circle, a closed track) doesn't stop at its ends: dragging past the end of the bar carries on round by as far as you drag; hold ◀ ▶ or a slider's keys to keep it moving. When a slider or a drag asks for more than the mechanism can do, it stops at the last pose that works. The feature list shows the mechanism's degrees of freedom.
 

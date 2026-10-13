@@ -33,10 +33,11 @@ body {
 #app {
   display: grid;
   grid-template-columns: 240px 1fr 260px;
-  grid-template-rows: auto 1fr 34px;
+  grid-template-rows: auto 1fr auto 34px;
   grid-template-areas:
     "top top top"
     "left canvas right"
+    "timeline timeline timeline"
     "tabs tabs tabs";
   height: 100vh;
   height: 100dvh;
@@ -461,11 +462,12 @@ details summary {
 @media (max-width: 760px) {
   #app {
     grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr 140px 34px;
+    grid-template-rows: auto 1fr 140px auto 34px;
     grid-template-areas:
       "top"
       "canvas"
       "right"
+      "timeline"
       "tabs";
   }
   #left {
@@ -761,4 +763,214 @@ details summary {
 
 .pick.on {
   box-shadow: 0 0 0 2px var(--text);
+}
+
+/* Watched dimensions in the feature list */
+.row .live { margin-left: auto; font-variant-numeric: tabular-nums; color: #0b8a7a; font-weight: 600; }
+
+/* Keyframe timeline (Motion mode), above the tabs. */
+#timeline {
+  grid-area: timeline;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  max-height: 190px;
+  overflow: auto;
+  user-select: none;
+  --tl-name: 180px;
+  --tl-pad: 18px;
+}
+
+#timeline[hidden] {
+  display: none;
+}
+
+.tl-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 4px 8px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.tl-head label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+}
+
+.tl-head input[type="number"] {
+  width: 64px;
+  font: inherit;
+  padding: 2px 4px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+
+.tl-head select {
+  font: inherit;
+  padding: 2px;
+}
+
+.tl-play {
+  color: var(--accent);
+}
+
+.tl-play svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.tl-play:hover {
+  color: var(--accent);
+}
+
+.tl-time {
+  font-variant-numeric: tabular-nums;
+  min-width: 52px;
+}
+
+.tl-keybtn svg {
+  width: 13px;
+  height: 13px;
+  fill: currentColor;
+}
+
+.tl-keybtn kbd {
+  margin-left: 4px;
+  font-size: 10px;
+  color: var(--muted);
+  font-family: inherit;
+}
+
+.tl-keyedit {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+}
+
+.tl-keyedit .check {
+  margin: 0;
+}
+
+.tl-hint {
+  font-size: 12px;
+}
+
+.tl-body {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--tl-name) 1fr;
+}
+
+.tl-name {
+  padding: 3px 8px;
+  height: 22px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.tl-name.sel {
+  color: var(--sel);
+  font-weight: 600;
+}
+
+.tl-corner {
+  height: 18px;
+  cursor: default;
+}
+
+.tl-lanes,
+.tl-lane {
+  position: relative;
+  margin: 0 var(--tl-pad);
+  border-bottom: 1px solid var(--border);
+  cursor: col-resize;
+}
+
+.tl-lane {
+  height: 22px;
+}
+
+.tl-ruler {
+  height: 18px;
+}
+
+.tl-tick {
+  position: absolute;
+  bottom: 0;
+  height: 5px;
+  border-left: 1px solid #b8bec8;
+}
+
+.tl-tick.major {
+  height: 8px;
+  border-left-color: var(--muted);
+}
+
+.tl-tick.major {
+  font-size: 10px;
+  color: var(--muted);
+  padding-left: 3px;
+  line-height: 1;
+  height: 16px;
+}
+
+.tl-seg {
+  position: absolute;
+  top: 10px;
+  height: 2px;
+  background: #9aa3b0;
+}
+
+.tl-seg.linear {
+  background: none;
+  border-top: 2px dashed #9aa3b0;
+  height: 0;
+}
+
+.tl-key {
+  position: absolute;
+  top: 5px;
+  width: 11px;
+  height: 11px;
+  margin-left: -5.5px;
+  background: var(--accent);
+  border: 1.5px solid #fff;
+  transform: rotate(45deg);
+  cursor: grab;
+  z-index: 1;
+}
+
+.tl-key.on {
+  background: var(--sel);
+}
+
+.tl-playhead-wrap {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--tl-name) + var(--tl-pad));
+  right: var(--tl-pad);
+  pointer-events: none;
+}
+
+.tl-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 2px solid var(--bad);
+  z-index: 1;
 }

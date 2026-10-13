@@ -1,6 +1,8 @@
 import type { Editor } from "../app/editor";
 import type { Body, Driver, Id } from "../core/model";
-import { bodyColor, fixedGround, isGround, PALETTE } from "../motion/bodies";
+import { bodyColor, fixedGround, isGround, PALETTE, posedDoc } from "../motion/bodies";
+import { constraintTypes } from "../constraints";
+import { dimText, isWatched } from "../render/layout";
 import { jointKinds, type Joint } from "../motion/joints";
 import { t } from "../i18n";
 import { icons } from "./icons";
@@ -15,7 +17,7 @@ export function jointName(ed: Editor, j: Joint): string {
   return `${t(jointKinds.get(j.kind).label)} · ${bodyName(ed, j.a)} – ${bodyName(ed, j.b)}`;
 }
 
-function driverName(ed: Editor, d: Driver): string {
+export function driverName(ed: Editor, d: Driver): string {
   const j = ed.mech.joint(d.joint);
   return `${bodyName(ed, d.b)} / ${bodyName(ed, d.a)}${j ? ` · ${t(jointKinds.get(j.kind).label)}` : ""}`;
 }
@@ -35,6 +37,25 @@ export function bodiesSection(ed: Editor): string {
   const rows = bodies.map((b) => row(ed, b.id, `${swatch(ed, b)}${esc(b.name)}${isGround(ed.doc, b.id) ? `<span class="tag">${t(fixedGround(ed.doc, b) ? "body.fixedTag" : "body.groundTag")}</span>` : ""}`)).join("");
   const empty = bodies.length ? "" : `<p class="muted small">${t("body.none")}</p>`;
   return `<details open><summary>${t("panel.bodies")} <span class="count">${bodies.length}</span></summary>${rows}${empty}</details>`;
+}
+
+/** A tangent between two circles, or a line and a circle, can mesh as gears or slide as a cam. */
+function meshable(ed: Editor, j: Joint): boolean {
+  const c = ed.doc.constraints[j.id];
+  if (c?.type !== "tangent" || c.refs.length !== 2) return false;
+  const kinds = c.refs.map((id) => ed.doc.geoms[id]?.kind).sort().join();
+  return kinds === "circle,circle" || kinds === "circle,line";
+}
+
+/** Watched dimensions with what they measure now. */
+function watchedSection(ed: Editor): string {
+  const watched = Object.values(ed.doc.constraints).filter(isWatched);
+  if (!watched.length) return "";
+  const posed = posedDoc(ed.doc);
+  const rows = watched
+    .map((c) => row(ed, c.id, `${esc(t(constraintTypes.get(c.type).label))}<b class="live">${esc(dimText(posed, c).replace(/[()]/g, ""))}</b>`))
+    .join("");
+  return `<details open><summary>${t("panel.watched")} <span class="count">${watched.length}</span></summary>${rows}</details>`;
 }
 
 /** Left panel in Motion mode. */
@@ -58,6 +79,7 @@ export function motionTree(ed: Editor): string {
         m.joints.length ? "" : `<p class="muted small">${t("motion.noJoints")}</p>`
       }</details>
       <details open><summary>${t("panel.sliders")} <span class="count">${drivers.length}</span></summary>${sliders}</details>
+      ${watchedSection(ed)}
     </div>`;
 }
 
@@ -136,13 +158,30 @@ export function motionProps(ed: Editor): string {
       <div class="prop-head">${esc(jointName(ed, j))}</div>
       <div class="readout"><span>${t(kind.unit === "deg" ? "panel.angle" : "panel.position")}</span><b>${v.toFixed(2)} ${kind.unit === "deg" ? "°" : "mm"}</b></div>
       ${
+        meshable(ed, j)
+          ? `<label class="check"><input type="checkbox" data-field="mesh" data-id="${j.id}" ${j.kind === "cam" ? "" : "checked"}> ${t("joint.mesh")}</label>`
+          : ""
+      }
+      ${
         kind.tangent
           ? `<label class="check"><input type="checkbox" data-field="canTurn" data-id="${j.id}" ${j.noTurn === undefined ? "checked" : ""}> ${t("joint.canTurn")}</label>`
           : ""
       }
+      ${tracePoint(ed, j) ? `<label class="check"><input type="checkbox" data-field="trace" data-id="${tracePoint(ed, j)}" ${traced(ed, tracePoint(ed, j)!) ? "checked" : ""}> ${t("joint.trace")}</label>` : ""}
       ${driven ? "" : `<button class="btn" data-add-driver="${j.id}">${icons.drive}${t("drive.add")}</button>`}`;
   }
   return html;
+}
+
+/** The point a joint sits at, for tracing its path. */
+function tracePoint(ed: Editor, j: Joint): Id | undefined {
+  return ed.doc.constraints[j.id]?.refs.find((id) => id in ed.doc.points);
+}
+
+function traced(ed: Editor, id: Id): boolean {
+  const traces = ed.doc.motion.traces ?? [];
+  const p = ed.doc.points[id];
+  return traces.some((x) => x === id || (ed.doc.points[x] && ed.doc.points[x].x === p.x && ed.doc.points[x].y === p.y));
 }
 
 /** Hook the Motion-mode controls of the right panel to the editor. */

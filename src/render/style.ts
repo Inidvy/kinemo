@@ -21,6 +21,10 @@ export const colors = {
   iconBorder: "#9aa3b2",
   iconText: "#333a46",
   dimension: "#1d1f24",
+  /** Watched (measure-only) dimensions. */
+  watch: "#0b8a7a",
+  /** Traced paths. */
+  trace: "#d81b60",
   boxSelect: "rgba(32,105,224,0.08)",
   boxSelectBorder: "rgba(32,105,224,0.6)",
 };

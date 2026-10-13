@@ -280,6 +280,40 @@ export class Mechanism {
     return ok ? q : null;
   }
 
+  /**
+   * Move several joints to slider values at once (a timeline frame), in
+   * small steps so the mechanism follows the nearest pose. Joints that wrap
+   * take the short way round. Stops at the last pose that works.
+   */
+  driveAll(targets: { joint: Id; value: number }[], start?: number[]): { q: number[]; reached: boolean } {
+    let q = start ?? this.current();
+    const moves = targets
+      .map((t) => {
+        const j = this.joint(t.joint);
+        if (!j) return null;
+        const kind = jointKinds.get(j.kind);
+        const from = this.measure(q, t.joint);
+        let delta = t.value - from;
+        if (kind.wraps?.(j)) {
+          const [lo, hi] = kind.range(this.doc, j);
+          const p = hi - lo;
+          delta = ((((delta + p / 2) % p) + p) % p) - p / 2;
+        }
+        const maxStep = kind.unit === "deg" ? 4 : this.size / 40;
+        return { joint: t.joint, from, delta, steps: Math.ceil(Math.abs(delta) / maxStep) };
+      })
+      .filter((x) => x !== null);
+    if (!moves.length) return { q, reached: false };
+    const steps = Math.max(1, ...moves.map((m) => m.steps));
+    for (let s = 1; s <= steps; s++) {
+      const drive = moves.map((m) => ({ joint: m.joint, value: m.from + (m.delta * s) / steps }));
+      const next = this.solve({ start: q, drive, maxTurn: 0.8 });
+      if (!next) return { q, reached: false };
+      q = next;
+    }
+    return { q, reached: true };
+  }
+
   /** Measured slider values for the given drivers. */
   driverValues(q: number[], drivers: Driver[]): Record<Id, number> {
     const out: Record<Id, number> = {};
@@ -291,8 +325,8 @@ export class Mechanism {
    * Move a joint to a slider value in small steps, so the mechanism follows
    * the nearest pose. Stops at the last pose that works.
    */
-  driveTo(jointId: Id, value: number, hold: Id[] = []): { q: number[]; reached: boolean } {
-    let q = this.current();
+  driveTo(jointId: Id, value: number, hold: Id[] = [], start?: number[]): { q: number[]; reached: boolean } {
+    let q = start ?? this.current();
     const j = this.joint(jointId);
     if (!j) return { q, reached: false };
     const kind = jointKinds.get(j.kind);

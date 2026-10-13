@@ -2,11 +2,13 @@ import type { Editor } from "../app/editor";
 import { arcRadius, type Geometry, type Id } from "../core/model";
 import { dist } from "../core/geom";
 import { constraintTypes } from "../constraints";
-import { formatValue } from "../render/layout";
+import { dimText, isWatched, measured } from "../render/layout";
 import { t } from "../i18n";
 import { actions } from "./actions";
 import { constraintIcon, icons } from "./icons";
 import type { SliderMotion } from "./sliderMotion";
+import { toggleTrace } from "../tools/motion";
+import { timelinePlayer } from "./timeline";
 import { bodiesSection, bodyProps, motionProps, motionTree, patchSliders, wireMotionPanel } from "./motionPanels";
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -18,7 +20,7 @@ function geomName(g: Geometry, index: number): string {
 export function constraintName(ed: Editor, id: Id): string {
   const c = ed.doc.constraints[id];
   const def = constraintTypes.get(c.type);
-  return def.dimension ? `${t(def.label)} ${formatValue(c)}` : t(def.label);
+  return def.dimension ? `${t(def.label)} ${dimText(ed.doc, c)}` : t(def.label);
 }
 
 /** Left panel: feature tree in the style of Onshape's feature list. */
@@ -108,6 +110,30 @@ export function mountProperties(el: HTMLElement, ed: Editor, sliders: SliderMoti
     } else if (field === "bodyName") {
       const name = input.value.trim();
       if (name) ed.change((doc) => (doc.bodies[id].name = name));
+    } else if (field === "watch") {
+      // Watching turns a dimension into a measurement; unwatching keeps what it measures now.
+      ed.change((doc) => {
+        const c = doc.constraints[id];
+        const def = constraintTypes.get(c.type);
+        const data = { ...(c.data ?? {}) };
+        if (input.checked) data.watch = 1;
+        else {
+          delete data.watch;
+          if (def.shape) c.value = measured(def.shape(doc, c));
+        }
+        if (Object.keys(data).length) c.data = data;
+        else delete c.data;
+      });
+    } else if (field === "mesh") {
+      // Gears (or a rack) mesh and roll; untick for a cam that slides.
+      ed.change((doc) => {
+        const c = doc.constraints[id];
+        const data = { ...(c.data ?? {}) };
+        if (input.checked) delete data.cam;
+        else data.cam = 1;
+        if (Object.keys(data).length) c.data = data;
+        else delete c.data;
+      });
     } else if (field === "canTurn") {
       // A slider joint either turns on its pin as it slides, or only slides.
       ed.change((doc) => {
@@ -118,6 +144,8 @@ export function mountProperties(el: HTMLElement, ed: Editor, sliders: SliderMoti
         c.data = Object.keys(data).length ? data : undefined;
         if (!c.data) delete c.data;
       });
+    } else if (field === "trace") {
+      toggleTrace(ed, id);
     } else if (field === "ground") {
       ed.change((doc) => (doc.bodies[id].ground = input.checked));
     } else if (field === "barWidth") {
@@ -134,7 +162,7 @@ export function mountProperties(el: HTMLElement, ed: Editor, sliders: SliderMoti
     const focused = !!active && el.contains(active) && active.matches("input, select, textarea");
     if (ed.mode === "motion") {
       // Rebuilding mid-movement would drop a held button; just refresh the values.
-      if (focused || sliders.active) patchSliders(el, ed);
+      if (focused || sliders.active || timelinePlayer()?.playing) patchSliders(el, ed);
       else el.innerHTML = motionProps(ed);
       return;
     }
@@ -152,7 +180,9 @@ export function mountProperties(el: HTMLElement, ed: Editor, sliders: SliderMoti
       const def = constraintTypes.get(c.type);
       html += `<div class="prop-head">${constraintIcon(def.id, esc(def.glyph), 16)}${t(def.label)}</div>`;
       if (def.dimension) {
-        html += `<label class="field">${t("panel.value")} (${def.unit === "deg" ? "°" : "mm"})<input type="number" step="any" data-field="value" data-id="${c.id}" value="${c.value}"></label>`;
+        if (!isWatched(c)) html += `<label class="field">${t("panel.value")} (${def.unit === "deg" ? "°" : "mm"})<input type="number" step="any" data-field="value" data-id="${c.id}" value="${c.value}"></label>`;
+        else html += `<div class="readout"><span>${t("panel.value")}</span><b>${dimText(doc, c)}</b></div>`;
+        html += check(c.id, "watch", isWatched(c), t("panel.watch"));
       }
       html += `<button class="btn danger" data-delete="1">${t("panel.delete")}</button>`;
     } else if (sel.length === 1 && doc.bodies[sel[0]]) {

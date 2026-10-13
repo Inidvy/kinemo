@@ -213,7 +213,8 @@ export function toPrimitives(doc: SketchDoc): Primitive[] {
   }
   for (const c of Object.values(doc.constraints)) {
     const def = constraintTypes.find(c.type);
-    if (def) prims.push(...def.toPrimitives(doc, c));
+    // A watched dimension only measures.
+    if (def && !c.data?.watch) prims.push(...def.toPrimitives(doc, c));
   }
   return prims;
 }

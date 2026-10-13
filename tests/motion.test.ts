@@ -295,6 +295,45 @@ describe("gears", () => {
   });
 });
 
+describe("cams", () => {
+  it("lifts a roller follower with an eccentric cam", () => {
+    const doc = emptyDoc();
+    const ground = bar(doc, 0, 0, 0, 100);
+    const camC = addPoint(doc, 0, 5);
+    const camCircle = addGeom<Circle>(doc, { kind: "circle", c: camC, r: 20 });
+    const arm = bar(doc, 0, 0, 0, 5);
+    const rollC = addPoint(doc, 0, 30);
+    const roller = addGeom<Circle>(doc, { kind: "circle", c: rollC, r: 5 });
+    const stem = bar(doc, 0, 30, 0, 50);
+    const pin = addConstraint(doc, { type: "coincident", refs: [ground.p1, arm.p1] });
+    addConstraint(doc, { type: "onCurve", refs: [stem.p2, ground.id] });
+    addConstraint(doc, { type: "onCurve", refs: [stem.p1, ground.id] });
+    const contact = addConstraint(doc, { type: "tangent", refs: [camCircle, roller] });
+    doc.constraints[contact].data = { cam: 1 };
+    body(doc, "ground", [ground.id], true);
+    body(doc, "cam", [camCircle, arm.id]);
+    body(doc, "follower", [roller, stem.id]);
+    const m = new Mechanism(doc);
+    expect(m.joint(contact)!.kind).toBe("cam");
+    expect(m.dof()).toBe(1);
+    const r = m.driveTo(pin, 180);
+    expect(r.reached).toBe(true);
+    expect(m.pose(r.q, "follower").y).toBeCloseTo(-10, 4);
+  });
+
+  it("treats a circle against an arc as a cam", () => {
+    const doc = emptyDoc();
+    const c = addPoint(doc, 0, 0), s = addPoint(doc, 20, 0), e = addPoint(doc, 0, 20);
+    const arc = addGeom<Arc>(doc, { kind: "arc", c, s, e });
+    const rc = addPoint(doc, 25 * Math.SQRT1_2, 25 * Math.SQRT1_2);
+    const roller = addGeom<Circle>(doc, { kind: "circle", c: rc, r: 5 });
+    const contact = addConstraint(doc, { type: "tangent", refs: [arc, roller] });
+    body(doc, "cam", [arc], true);
+    body(doc, "roller", [roller]);
+    expect(new Mechanism(doc).joint(contact)!.kind).toBe("cam");
+  });
+});
+
 describe("bodies", () => {
   it("turns a body fixed at one point about it, and holds one fixed at two", async () => {
     const { groundBodies } = await import("../src/motion/bodies");

@@ -74,24 +74,45 @@ export function defaultLabel(shape: DimensionShape, view: View): Vec {
   return { x: r * Math.SQRT1_2, y: r * Math.SQRT1_2 };
 }
 
-export function formatValue(c: Constraint): string {
+/** A watched dimension only measures: it doesn't drive the sketch. */
+export const isWatched = (c: Constraint): boolean => !!c.data?.watch;
+
+/** What a dimension measures now, from its drawn shape (mm or degrees). */
+export function measured(shape: DimensionShape): number {
+  if (shape.kind === "linear") return Math.hypot(shape.b.x - shape.a.x, shape.b.y - shape.a.y);
+  if (shape.kind === "radial") return shape.diameter ? shape.r * 2 : shape.r;
+  let sweep = shape.d2 - shape.d1;
+  while (sweep <= -Math.PI) sweep += 2 * Math.PI;
+  while (sweep > Math.PI) sweep -= 2 * Math.PI;
+  return (Math.abs(sweep) * 180) / Math.PI;
+}
+
+/** The value a dimension shows: its set value, or for a watched one what it measures, in brackets. */
+export function dimText(doc: SketchDoc, c: Constraint): string {
   const def = constraintTypes.get(c.type);
-  const v = (c.value ?? 0).toFixed(2).replace(/\.?0+$/, "");
+  if (!isWatched(c) || !def.shape) return formatValue(c);
+  return `(${formatValue(c, measured(def.shape(doc, c)))})`;
+}
+
+export function formatValue(c: Constraint, value = c.value ?? 0): string {
+  const def = constraintTypes.get(c.type);
+  const v = value.toFixed(2).replace(/\.?0+$/, "");
   if (def.unit === "deg") return `${v}°`;
   if (c.type === "diameter") return `Ø${v}`;
   if (c.type === "radius") return `R${v}`;
   return v;
 }
 
-export function layoutDims(doc: SketchDoc, view: View): DimLayout[] {
+export function layoutDims(doc: SketchDoc, view: View, onlyWatched = false): DimLayout[] {
   const out: DimLayout[] = [];
   for (const c of Object.values(doc.constraints)) {
     const def = constraintTypes.find(c.type);
     if (!def?.dimension || !def.shape) continue;
+    if (onlyWatched && !isWatched(c)) continue;
     const shape = def.shape(doc, c);
     const anchor = dimAnchor(shape);
     const label = c.label ?? defaultLabel(shape, view);
-    out.push({ cid: c.id, shape, anchor, text: add(anchor, label), label: formatValue(c) });
+    out.push({ cid: c.id, shape, anchor, text: add(anchor, label), label: dimText(doc, c) });
   }
   return out;
 }

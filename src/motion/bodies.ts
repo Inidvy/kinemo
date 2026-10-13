@@ -91,6 +91,14 @@ export function poseOf(doc: SketchDoc, bodyId: Id | undefined): Pose {
   return (bodyId && doc.motion.poses[bodyId]) || IDENTITY;
 }
 
+/** The document with every body's points moved to where the body is now (for measuring). */
+export function posedDoc(doc: SketchDoc): SketchDoc {
+  const owner = ownerMap(doc);
+  const points: SketchDoc["points"] = {};
+  for (const p of Object.values(doc.points)) points[p.id] = { ...p, ...applyPose(poseOf(doc, owner.get(p.id)), p) };
+  return { ...doc, points };
+}
+
 /** Where a sketch point is in Motion mode. Points outside bodies stay put. */
 export function motionPoint(doc: SketchDoc, owner: Map<Id, Id>, pointId: Id): Vec {
   return applyPose(poseOf(doc, owner.get(pointId)), doc.points[pointId]);

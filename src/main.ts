@@ -10,6 +10,8 @@ import { mountFeatureTree, mountProperties } from "./ui/panels";
 import { mountDimEditor } from "./ui/dimEditor";
 import { mountWarning } from "./ui/warning";
 import { SliderMotion } from "./ui/sliderMotion";
+import { mountTimeline } from "./ui/timeline";
+import { actions } from "./ui/actions";
 import { tools } from "./tools";
 import { t } from "./i18n";
 import { svgIcon, iconPaths } from "./ui/icons";
@@ -29,6 +31,7 @@ async function main() {
   mountProperties($("#right"), ed, new SliderMotion(ed));
   mountDimEditor($("#canvas-wrap"), ed);
   mountWarning($("#warning"), ed);
+  mountTimeline($("#timeline"), ed);
   mountKeys(ed);
 
   // Bottom tabs, like Onshape's Part Studio / Assembly tabs.
@@ -53,8 +56,7 @@ async function main() {
   });
 
   requestAnimationFrame(() => {
-    ed.view.fit(Object.values(ed.doc.points), canvas.clientWidth, canvas.clientHeight);
-    ed.emit();
+    actions.get("fit").run(ed);
   });
   (window as unknown as { kinemo: Editor }).kinemo = ed;
 }

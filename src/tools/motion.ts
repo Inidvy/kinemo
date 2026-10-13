@@ -1,5 +1,6 @@
 import type { Id, Vec } from "../core/model";
-import { applyPose, isGround, poseOf } from "../motion/bodies";
+import { applyPose, isGround, ownerMap, poseOf } from "../motion/bodies";
+import { colors } from "../render/style";
 import { jointKinds } from "../motion/joints";
 import { addDriver } from "../motion/drivers";
 import { icons } from "../ui/icons";
@@ -186,5 +187,70 @@ export const driveTool: Tool = {
         ed.select(picks);
       }
     }
+  },
+};
+
+// ------------------------------------------------------------------ trace
+
+/** The body point nearest the cursor (where it is now), within reach. */
+function nearestBodyPoint(ed: Editor, at: Vec, bodyHint?: Id): { id: Id; pos: Vec } | null {
+  const doc = ed.doc;
+  const owner = ownerMap(doc);
+  const reach = ed.view.px(14);
+  let best: { id: Id; pos: Vec } | null = null;
+  let bestD = Infinity;
+  for (const p of Object.values(doc.points)) {
+    const b = owner.get(p.id);
+    if (!b) continue;
+    const pos = applyPose(poseOf(doc, b), p);
+    const d = Math.hypot(pos.x - at.x, pos.y - at.y);
+    // Inside a body, its nearest point counts even when a bit further off.
+    if ((d < reach || b === bodyHint) && d < bestD) [best, bestD] = [{ id: p.id, pos }, d];
+  }
+  return best;
+}
+
+let traceHover: Vec | null = null;
+
+/** Turn path tracing on or off for a point (and any point sitting on it). */
+export function toggleTrace(ed: Editor, id: Id): void {
+  const doc = ed.doc;
+  const owner = ownerMap(doc);
+  const where = (pid: Id) => applyPose(poseOf(doc, owner.get(pid)), doc.points[pid]);
+  const at = where(id);
+  const same = (pid: Id) => doc.points[pid] && Math.hypot(where(pid).x - at.x, where(pid).y - at.y) < 1e-6;
+  const traces = doc.motion.traces ?? [];
+  const on = traces.some(same);
+  ed.change((d) => (d.motion.traces = on ? traces.filter((p) => !same(p)) : [...traces, id]));
+}
+
+/** Motion mode: click a point of a bar to draw the path it follows. */
+export const traceTool: Tool = {
+  id: "trace",
+  label: "tool.trace",
+  icon: icons.trace,
+  shortcut: "t",
+  modes: ["motion"],
+  hint: "hint.trace",
+  deactivate() {
+    traceHover = null;
+  },
+  move(ed, e) {
+    traceHover = nearestBodyPoint(ed, e.world, e.hit?.kind === "body" ? e.hit.id : undefined)?.pos ?? null;
+  },
+  down(ed, e) {
+    const p = nearestBodyPoint(ed, e.world, e.hit?.kind === "body" ? e.hit.id : undefined);
+    if (p) toggleTrace(ed, p.id);
+  },
+  overlay({ ctx, ed }) {
+    if (!traceHover) return;
+    const s = ed.view.toScreen(traceHover);
+    ctx.save();
+    ctx.strokeStyle = colors.trace;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, 7, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   },
 };
