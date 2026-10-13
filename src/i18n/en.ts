@@ -54,7 +54,7 @@ export const en: Record<string, string> = {
   "joint.slot": "Slider",
   "joint.curveSlot": "Curved slider",
 
-  "hint.move": "Drag a bar to move the mechanism. Click a body or joint to select it. D adds a slider.",
+  "hint.move": "Drag a bar or joint to move the mechanism; a slider joint runs along its slot. Click a body or joint to select it. D adds a slider.",
   "hint.drive1": "Add slider: click the body it measures from, or click a joint.",
   "hint.drive2": "Now click the body that moves.",
   "hint.drive3": "Now click the joint between them.",
@@ -63,7 +63,7 @@ export const en: Record<string, string> = {
   "drive.notJoined": "Those two bodies aren't joined. Pick another body.",
   "drive.add": "Add slider",
   "slider.keys": "Keys",
-  "slider.setKey": "Click, then press the key that moves this slider (Backspace clears)",
+  "slider.setKey": "Click, then press the key or keys (like 1 + ←) that move this slider. Backspace clears.",
   "slider.pressKey": "press…",
   "slider.hold": "Hold to keep moving",
 

@@ -60,10 +60,10 @@ Select geometry and press G to group it into one rigid body. A body fixed at one
 | Shift+F | Flip to the other way the mechanism assembles |
 | R | Reset every body to its sketched position |
 | Shift+G | Toggle ground |
-| ← → ↑ ↓ | Hold to move the first and second slider (each slider's keys can be changed in its panel) |
+| ← → ↑ ↓ | Hold to move the first and second slider (each slider's keys can be changed in its panel, also to a combination like 1 + ←) |
 | Del | Delete the selected joint's slider |
 
-Sliders sit in the right panel, and you can drag them and the bars together. Sliders ease smoothly to a new value; hold ◀ ▶ or a slider's keys to keep it moving. When a slider or a drag asks for more than the mechanism can do, it stops at the last pose that works. The feature list shows the mechanism's degrees of freedom.
+Sliders sit in the right panel, and you can drag them and the bars together. Dragging a joint moves its body, so a slider joint runs along its slot. A driven slider joint shows an arrow along its slot. Sliders ease smoothly to a new value; hold ◀ ▶ or a slider's keys to keep it moving. When a slider or a drag asks for more than the mechanism can do, it stops at the last pose that works. The feature list shows the mechanism's degrees of freedom.
 
 ## Adding a feature
 

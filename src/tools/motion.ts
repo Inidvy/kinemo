@@ -1,5 +1,6 @@
 import type { Id, Vec } from "../core/model";
-import { applyPose, poseOf } from "../motion/bodies";
+import { applyPose, isGround, poseOf } from "../motion/bodies";
+import { jointKinds } from "../motion/joints";
 import { addDriver } from "../motion/drivers";
 import { icons } from "../ui/icons";
 import { t } from "../i18n";
@@ -36,6 +37,15 @@ export const moveTool: Tool = {
     ed.select([h.id]);
     if (h.kind === "body") {
       grab = { body: h.id, local: toLocal(ed, h.id, e.world) };
+      ed.beginDrag();
+    } else if (h.kind === "joint") {
+      // Dragging a joint moves the body it carries: a slider runs along its slot.
+      const m = ed.mech;
+      const j = m.joint(h.id);
+      const body = j && [j.b, j.a].find((id) => id && ed.doc.bodies[id] && !isGround(ed.doc, id));
+      if (!j || !body) return;
+      const at = jointKinds.get(j.kind).anchor(m.context(m.current()), j);
+      grab = { body, local: toLocal(ed, body, at) };
       ed.beginDrag();
     }
   },

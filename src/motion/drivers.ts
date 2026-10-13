@@ -17,7 +17,11 @@ export function addDriver(doc: SketchDoc, joint: Id, a: Id, b: Id): Id {
 
 const NAMES: Record<string, string> = { arrowleft: "←", arrowright: "→", arrowup: "↑", arrowdown: "↓", " ": "Space" };
 
+/** A key or key combination ("1 + arrowleft") as shown on a key button. */
 export function keyName(k: string | undefined): string {
   if (!k) return "–";
-  return NAMES[k] ?? (k.length === 1 ? k.toUpperCase() : k[0].toUpperCase() + k.slice(1));
+  return k
+    .split(" + ")
+    .map((p) => NAMES[p] ?? (p.length === 1 ? p.toUpperCase() : p[0].toUpperCase() + p.slice(1)))
+    .join(" + ");
 }

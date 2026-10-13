@@ -320,9 +320,59 @@ export function drawJoints(ctx: CanvasRenderingContext2D, ed: Editor): void {
       ctx.strokeStyle = sel ? colors.selected : colors.hover;
       ctx.stroke();
     }
-    if (driven.has(j.id)) motorArrow(ctx, at, r + 6);
+    if (driven.has(j.id)) {
+      if (j.kind === "slot") slideArrow(ctx, at, v.toScreen(k.w(j.refs[1])), v.toScreen(k.w(j.refs[2])), r);
+      else if (j.kind === "curveSlot") curveArrow(ctx, at, v.toScreen(k.w(j.refs[1])), r);
+      else motorArrow(ctx, at, r + 6);
+    }
   }
   ctx.restore();
+}
+
+function arrowHead(ctx: CanvasRenderingContext2D, tip: Vec, u: Vec) {
+  ctx.beginPath();
+  ctx.moveTo(tip.x + u.x * 5, tip.y + u.y * 5);
+  ctx.lineTo(tip.x - u.y * 4, tip.y + u.x * 4);
+  ctx.lineTo(tip.x + u.y * 4, tip.y - u.x * 4);
+  ctx.closePath();
+  ctx.fill();
+}
+
+/** A driven slider: a double arrow along its slot, either side of the pin. */
+function slideArrow(ctx: CanvasRenderingContext2D, at: Vec, l1: Vec, l2: Vec, r: number) {
+  const l = dist(l1, l2) || 1;
+  const u = { x: (l2.x - l1.x) / l, y: (l2.y - l1.y) / l };
+  ctx.strokeStyle = colors.free;
+  ctx.fillStyle = colors.free;
+  ctx.lineWidth = 1.8;
+  for (const s of [1, -1]) {
+    const v = { x: u.x * s, y: u.y * s };
+    const tip = { x: at.x + v.x * (r + 14), y: at.y + v.y * (r + 14) };
+    ctx.beginPath();
+    ctx.moveTo(at.x + v.x * (r + 3), at.y + v.y * (r + 3));
+    ctx.lineTo(tip.x, tip.y);
+    ctx.stroke();
+    arrowHead(ctx, tip, v);
+  }
+}
+
+/** A driven curved slider: a double arrow along the curve, either side of the pin. */
+function curveArrow(ctx: CanvasRenderingContext2D, at: Vec, c: Vec, r: number) {
+  const R = dist(at, c);
+  if (R < 1) return motorArrow(ctx, at, r + 6);
+  const a = Math.atan2(at.y - c.y, at.x - c.x);
+  const gap = (r + 3) / R, reach = (r + 14) / R;
+  ctx.strokeStyle = colors.free;
+  ctx.fillStyle = colors.free;
+  ctx.lineWidth = 1.8;
+  for (const s of [1, -1]) {
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, R, a + s * gap, a + s * reach, s < 0);
+    ctx.stroke();
+    const e = a + s * reach;
+    const tip = { x: c.x + Math.cos(e) * R, y: c.y + Math.sin(e) * R };
+    arrowHead(ctx, tip, { x: -Math.sin(e) * s, y: Math.cos(e) * s });
+  }
 }
 
 function motorArrow(ctx: CanvasRenderingContext2D, at: Vec, r: number) {

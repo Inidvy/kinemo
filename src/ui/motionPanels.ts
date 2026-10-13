@@ -190,7 +190,32 @@ export function wireMotionPanel(el: HTMLElement, ed: Editor, sliders: SliderMoti
     }
   });
 
-  // Keyboard: assign a key to a slider, or hold a slider's key to move it.
+  // Keyboard: assign a key or key combination (like 1 + ←) to a slider, or
+  // hold it to move the slider. When one binding is part of another that is
+  // also held (← inside 1 + ←), only the longer one counts.
+  const down = new Set<string>();
+  let captured: string[] = [];
+  /** Sliders moving because of a held key, so letting go only stops those. */
+  const keyHeld = new Set<Id>();
+  const parts = (k: string | undefined) => (k ? k.split(" + ") : []);
+  const update = () => {
+    const active: { driver: Id; dir: number; keys: string[] }[] = [];
+    for (const d of Object.values(ed.doc.motion.drivers))
+      d.keys?.forEach((k, i) => {
+        const keys = parts(k);
+        if (keys.length && keys.every((x) => down.has(x))) active.push({ driver: d.id, dir: i === 0 ? -1 : 1, keys });
+      });
+    const winners = active.filter((a) => !active.some((o) => o.keys.length > a.keys.length && a.keys.every((x) => o.keys.includes(x))));
+    for (const d of Object.values(ed.doc.motion.drivers)) {
+      const mine = winners.filter((w) => w.driver === d.id);
+      const dir = mine.reduce((s, w) => s + w.dir, 0);
+      if (mine.length && dir) {
+        sliders.hold(d.id, dir);
+        keyHeld.add(d.id);
+      } else if (keyHeld.delete(d.id)) sliders.release(d.id);
+    }
+    return winners.length > 0;
+  };
   window.addEventListener(
     "keydown",
     (e) => {
@@ -199,29 +224,15 @@ export function wireMotionPanel(el: HTMLElement, ed: Editor, sliders: SliderMoti
       if (capturing) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        const { driver, index } = capturing;
-        capturing = null;
-        if (key !== "escape" && ed.doc.motion.drivers[driver]) {
-          ed.change((doc) => {
-            const d = doc.motion.drivers[driver];
-            const keys: [string, string] = d.keys ? [...d.keys] : ["", ""];
-            keys[index] = key === "backspace" || key === "delete" ? "" : key;
-            // A key moves one slider only.
-            for (const o of Object.values(doc.motion.drivers)) if (o.id !== driver && o.keys) o.keys = o.keys.map((k) => (k === keys[index] ? "" : k)) as [string, string];
-            d.keys = keys;
-          });
-        } else ed.emit();
+        if (!captured.includes(key)) captured.push(key);
         return;
       }
       if ((e.target as HTMLElement).closest("input[type=text], input[type=number], textarea")) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      for (const d of Object.values(ed.doc.motion.drivers)) {
-        const i = d.keys?.indexOf(key) ?? -1;
-        if (i < 0 || !key) continue;
+      down.add(key);
+      if (update()) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        if (!e.repeat) sliders.hold(d.id, i === 0 ? -1 : 1);
-        return;
       }
     },
     true,
@@ -230,11 +241,39 @@ export function wireMotionPanel(el: HTMLElement, ed: Editor, sliders: SliderMoti
     "keyup",
     (e) => {
       const key = e.key.toLowerCase();
-      for (const d of Object.values(ed.doc.motion.drivers)) if (d.keys?.includes(key)) sliders.release(d.id);
+      if (capturing && captured.length) {
+        // The binding is every key that was down when the first one is let go.
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const { driver, index } = capturing;
+        const keys = captured;
+        capturing = null;
+        captured = [];
+        const one = keys.length === 1 ? keys[0] : "";
+        if (one !== "escape" && ed.doc.motion.drivers[driver]) {
+          const binding = one === "backspace" || one === "delete" ? "" : keys.join(" + ");
+          ed.change((doc) => {
+            const d = doc.motion.drivers[driver];
+            const next: [string, string] = d.keys ? [...d.keys] : ["", ""];
+            next[index] = binding;
+            // A binding moves one slider only.
+            for (const o of Object.values(doc.motion.drivers)) if (o.id !== driver && o.keys) o.keys = o.keys.map((k) => (k === binding ? "" : k)) as [string, string];
+            d.keys = next;
+          });
+        } else ed.emit();
+        return;
+      }
+      down.delete(key);
+      update();
     },
     true,
   );
-  window.addEventListener("blur", () => sliders.release());
+  window.addEventListener("blur", () => {
+    down.clear();
+    keyHeld.clear();
+    captured = [];
+    sliders.release();
+  });
 }
 
 /** While a slider has focus, keep the other sliders' values current without rebuilding the panel. */
