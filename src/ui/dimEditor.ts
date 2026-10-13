@@ -50,4 +50,14 @@ export function mountDimEditor(wrap: HTMLElement, ed: Editor): void {
     e.stopPropagation();
   });
   input.addEventListener("blur", () => close(true));
+  // The canvas keeps focus on mousedown, so the box never blurs from a canvas
+  // click. Commit on any press outside it, then let that press carry on as
+  // the next step (pick, draw, select).
+  document.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (cid && e.target !== input) close(true);
+    },
+    true,
+  );
 }
