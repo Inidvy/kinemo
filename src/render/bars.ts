@@ -121,8 +121,6 @@ export function bodyLoops(doc: SketchDoc, b: Body): Vec[][] {
   return loops;
 }
 
-let layer: HTMLCanvasElement | null = null;
-
 /** Fill opacity of a body: see-through, so overlapping bodies stay readable. */
 const FILL_ALPHA = 0.32;
 
@@ -131,10 +129,98 @@ function slotWidth(doc: SketchDoc, v: View): number {
   return Math.max(5, doc.settings.barWidth * v.zoom * 0.45);
 }
 
+// Bodies are drawn as filled outlines rather than strokes, so all parts of a
+// body can be filled in one go: one fill of many same-way-round shapes is
+// their union, so overlaps don't darken. Everything stays on the main canvas.
+
+type Poly = Vec[];
+/** One part of a body's shape: a bar, a band, a plate. A ring is two polygons. */
+type Part = Poly[];
+
+const signedArea = (p: Poly) => {
+  let s = 0;
+  for (let i = 0, j = p.length - 1; i < p.length; j = i++) s += (p[j].x - p[i].x) * (p[j].y + p[i].y);
+  return s;
+};
+const orient = (p: Poly, sign = 1): Poly => (signedArea(p) * sign < 0 ? p.reverse() : p);
+
+/** Points along an arc from angle a0 to a1 (screen angles), appended to out. */
+function arcPts(out: Poly, c: Vec, r: number, a0: number, a1: number) {
+  const n = Math.max(2, Math.min(96, Math.ceil((Math.abs(a1 - a0) * Math.max(r, 1)) / 3)));
+  for (let i = 0; i <= n; i++) {
+    const a = a0 + ((a1 - a0) * i) / n;
+    out.push({ x: c.x + Math.cos(a) * r, y: c.y + Math.sin(a) * r });
+  }
+}
+
+const disc = (c: Vec, h: number): Part => {
+  const p: Poly = [];
+  arcPts(p, c, h, 0, Math.PI * 2);
+  p.pop();
+  return [orient(p)];
+};
+
+/** The outline of a geometry drawn at a given width, in screen coordinates. */
+function geomPart(doc: SketchDoc, v: View, pose: Pose, g: Geometry, width: number): Part {
+  const h = width / 2;
+  const P = (id: Id) => v.toScreen(applyPose(pose, doc.points[id]));
+  if (g.kind === "line") {
+    const a = P(g.p1), b = P(g.p2);
+    if (dist(a, b) < 1e-6) return disc(a, h);
+    const ang = Math.atan2(b.y - a.y, b.x - a.x);
+    const p: Poly = [];
+    arcPts(p, b, h, ang - Math.PI / 2, ang + Math.PI / 2);
+    arcPts(p, a, h, ang + Math.PI / 2, ang + (3 * Math.PI) / 2);
+    return [orient(p)];
+  }
+  const c = P(g.c);
+  if (g.kind === "circle") {
+    const r = g.r * v.zoom;
+    const outer: Poly = [];
+    arcPts(outer, c, r + h, 0, Math.PI * 2);
+    outer.pop();
+    if (r - h <= 0) return [orient(outer)];
+    const inner: Poly = [];
+    arcPts(inner, c, r - h, 0, Math.PI * 2);
+    inner.pop();
+    return [orient(outer), orient(inner, -1)];
+  }
+  // An arc: a band with round ends. The sketch angle a is screen angle -a.
+  const r = arcRadius(doc, g) * v.zoom;
+  const s = -(angleOf(sub(doc.points[g.e], doc.points[g.c])) + pose.a);
+  let e = -(angleOf(sub(doc.points[g.s], doc.points[g.c])) + pose.a);
+  while (e <= s) e += Math.PI * 2;
+  const end = { x: c.x + Math.cos(e) * r, y: c.y + Math.sin(e) * r };
+  const start = { x: c.x + Math.cos(s) * r, y: c.y + Math.sin(s) * r };
+  const p: Poly = [];
+  arcPts(p, c, r + h, s, e);
+  arcPts(p, end, h, e, e + Math.PI);
+  if (r - h > 0) arcPts(p, c, r - h, e, s);
+  else p.push(c);
+  arcPts(p, start, h, s + Math.PI, s + Math.PI * 2);
+  return [orient(p)];
+}
+
+function addPolys(path: Path2D, polys: Poly[]) {
+  for (const p of polys) {
+    path.moveTo(p[0].x, p[0].y);
+    for (let i = 1; i < p.length; i++) path.lineTo(p[i].x, p[i].y);
+    path.closePath();
+  }
+}
+
+/** Limit drawing to outside a part: a clip of the whole canvas with the part cut out. */
+function clipOutside(ctx: CanvasRenderingContext2D, part: Part) {
+  const path = new Path2D();
+  path.rect(-1e5, -1e5, 2e5, 2e5);
+  addPolys(path, part);
+  ctx.clip(path, "evenodd");
+}
+
 /**
- * Bodies as see-through shapes with a solid outline. Each body is painted on
- * its own layer first, so the parts of one body merge into one shape instead
- * of darkening where they overlap, and slots are cut clean through it.
+ * Bodies as see-through shapes with a solid outline. All parts of a body are
+ * filled together, so they merge into one shape instead of darkening where
+ * they overlap, and slots are cut clean through it.
  */
 export function drawBodies(ctx: CanvasRenderingContext2D, ed: Editor, style: BarStyle): void {
   const doc = ed.doc;
@@ -143,103 +229,67 @@ export function drawBodies(ctx: CanvasRenderingContext2D, ed: Editor, style: Bar
   const hole = slotWidth(doc, v);
   const slots = slotGeoms(doc, ed.mech.joints);
   const ground = groundBodies(doc);
-  layer ??= document.createElement("canvas");
-  if (layer.width !== ctx.canvas.width || layer.height !== ctx.canvas.height) {
-    layer.width = ctx.canvas.width;
-    layer.height = ctx.canvas.height;
-  }
-  const lc = layer.getContext("2d")!;
-  const clear = () => {
-    lc.setTransform(1, 0, 0, 1, 0, 0);
-    lc.globalCompositeOperation = "source-over";
-    lc.clearRect(0, 0, layer!.width, layer!.height);
-    lc.setTransform(ctx.getTransform());
-    lc.lineCap = "round";
-    lc.lineJoin = "round";
-    lc.setLineDash([]);
-  };
-  const stamp = (alpha: number) => {
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalAlpha = alpha;
-    ctx.drawImage(layer!, 0, 0);
-    ctx.restore();
-  };
 
   // Ground first so moving bodies sit on top of it.
   const bodies = Object.values(doc.bodies).sort((a, b) => Number(ground.has(b.id)) - Number(ground.has(a.id)));
+  ctx.save();
+  ctx.setLineDash([]);
   for (const b of bodies) {
     const pose = style.posed ? poseOf(doc, b.id) : IDENTITY;
     const color = bodyColor(doc, b);
     const edge = ed.selection.has(b.id) ? colors.selected : style.hover === b.id ? colors.hover : color;
     const geoms = bodyGeoms(doc, b).filter((g) => !g.construction);
     const slotted = geoms.filter((g) => slots.has(g.id));
-    const loops = bodyLoops(doc, b).map((loop) => loop.map((p) => v.toScreen(applyPose(pose, p))));
+    const loops = bodyLoops(doc, b).map((loop) => orient(loop.map((p) => v.toScreen(applyPose(pose, p)))));
     const loose = b.members.filter((id) => doc.points[id]).map((id) => v.toScreen(applyPose(pose, doc.points[id])));
-    // The body's shape, stroked at a given width.
-    const shape = (width: number) => {
-      lc.lineWidth = width;
-      for (const p of loops) {
-        lc.beginPath();
-        p.forEach((q, i) => (i ? lc.lineTo(q.x, q.y) : lc.moveTo(q.x, q.y)));
-        lc.closePath();
-        lc.fill();
-        lc.stroke();
-      }
-      for (const g of geoms) {
-        tracePath(lc, doc, v, pose, g);
-        lc.stroke();
-      }
-      for (const p of loose) {
-        lc.beginPath();
-        lc.arc(p.x, p.y, width / 2, 0, Math.PI * 2);
-        lc.fill();
-      }
+    const parts = (width: number): Part[] => [
+      ...loops.map((p) => [p]),
+      ...geoms.map((g) => geomPart(doc, v, pose, g, width)),
+      ...loose.map((p) => disc(p, width / 2)),
+    ];
+    const union = (list: Part[]) => {
+      const path = new Path2D();
+      for (const part of list) addPolys(path, part);
+      return path;
     };
-    const cutSlots = (width: number) => {
-      lc.globalCompositeOperation = "destination-out";
-      lc.lineWidth = width;
-      for (const g of slotted) {
-        tracePath(lc, doc, v, pose, g);
-        lc.stroke();
-      }
-      lc.globalCompositeOperation = "source-over";
-    };
+    const inner = parts(w);
+    if (!inner.length) continue;
+    const holes = slotted.map((g) => geomPart(doc, v, pose, g, hole));
 
     // Fill: the shape with the slots cut out, laid down see-through.
-    clear();
-    lc.fillStyle = lc.strokeStyle = color;
-    shape(w);
-    cutSlots(hole);
-    stamp(style.alpha * FILL_ALPHA);
-
-    // Outline: a ring around the shape and around each slot.
-    clear();
-    lc.fillStyle = lc.strokeStyle = edge;
-    shape(w + 4);
-    lc.globalCompositeOperation = "destination-out";
-    shape(w);
-    lc.globalCompositeOperation = "source-over";
-    lc.lineWidth = hole + 3;
-    for (const g of slotted) {
-      tracePath(lc, doc, v, pose, g);
-      lc.stroke();
-    }
-    cutSlots(hole);
-    stamp(style.alpha);
-
-    // A dotted line along the middle of each slot: the path the pin follows.
     ctx.save();
-    ctx.globalAlpha = style.alpha;
-    ctx.strokeStyle = edge;
-    ctx.lineWidth = 1.2;
-    ctx.setLineDash([4, 4]);
-    for (const g of slotted) {
-      tracePath(ctx, doc, v, pose, g);
-      ctx.stroke();
-    }
+    for (const h of holes) clipOutside(ctx, h);
+    ctx.globalAlpha = style.alpha * FILL_ALPHA;
+    ctx.fillStyle = color;
+    ctx.fill(union(inner));
     ctx.restore();
+
+    // Outline: a ring around the shape...
+    ctx.globalAlpha = style.alpha;
+    ctx.fillStyle = edge;
+    ctx.save();
+    for (const part of inner) clipOutside(ctx, part);
+    ctx.fill(union(parts(w + 4)));
+    ctx.restore();
+    // ...and around each slot.
+    if (holes.length) {
+      ctx.save();
+      for (const h of holes) clipOutside(ctx, h);
+      ctx.fill(union(slotted.map((g) => geomPart(doc, v, pose, g, hole + 3))));
+      ctx.restore();
+
+      // A dotted line along the middle of each slot: the path the pin follows.
+      ctx.strokeStyle = edge;
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([4, 4]);
+      for (const g of slotted) {
+        tracePath(ctx, doc, v, pose, g);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+    }
   }
+  ctx.restore();
 }
 
 /** Pins as yellow discs the width of a slot; fixed and ground pivots are grey. Driven joints get an arrow. */
