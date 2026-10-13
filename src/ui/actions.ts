@@ -136,26 +136,42 @@ const builtins: Action[] = [
     group: "body",
     modes: SKETCH,
     run(ed) {
-      const ids = [...ed.selection].filter((id) => ed.doc.geoms[id] || ed.doc.points[id]);
-      if (!ids.length) return ed.flash(t("hint.makeBody"));
-      let created: Id = "";
+      const doc0 = ed.doc;
+      // The bodies the selection already touches: selected bodies, and bodies
+      // a selected line, arc, circle or lone point belongs to.
+      const targets = new Set<Id>();
+      for (const id of ed.selection) {
+        if (doc0.bodies[id]) targets.add(id);
+        for (const b of Object.values(doc0.bodies)) if (b.members.includes(id)) targets.add(b.id);
+      }
+      if (targets.size > 1) return ed.flash(t("body.twoBodies"));
+      const target = [...targets][0] as Id | undefined;
+      const inTarget = new Set(target ? doc0.bodies[target].members : []);
+      const owner = ownerMap(doc0);
+      const ids = [...ed.selection].filter((id) => (doc0.geoms[id] || doc0.points[id]) && !(target && owner.get(id) === target));
+      if (!ids.length) return ed.flash(t(target ? "body.nothingToAdd" : "hint.makeBody"));
+      let created: Id = target ?? "";
       ed.change((doc) => {
-        // A selected end point of geometry outside the selection becomes a
-        // new point pinned to it, so the two bodies join there.
-        const used = new Set(Object.values(doc.geoms).filter((g) => !ids.includes(g.id)).flatMap((g) => geomPoints(g)));
+        // A selected end point of geometry outside the body becomes a new
+        // point pinned to it, so the two bodies join there.
+        const keep = new Set([...ids, ...inTarget]);
+        const used = new Set(Object.values(doc.geoms).filter((g) => !keep.has(g.id)).flatMap((g) => geomPoints(g)));
         ids.forEach((id, i) => {
           if (!doc.points[id] || !used.has(id)) return;
           const p = addPoint(doc, doc.points[id].x, doc.points[id].y);
           addConstraint(doc, { type: "coincident", refs: [id, p] });
           ids[i] = p;
         });
-        // An item belongs to one body only.
-        for (const b of Object.values(doc.bodies)) b.members = b.members.filter((m) => !ids.includes(m));
-        for (const b of Object.values(doc.bodies)) if (!b.members.length) delete doc.bodies[b.id];
+        // Selecting new parts with part of a body adds them to that body.
+        if (target) {
+          doc.bodies[target].members.push(...ids);
+          return;
+        }
         created = `b${doc.nextId++}`;
         doc.bodies[created] = { id: created, name: nextBodyName(doc, t("body.name")), members: ids };
       });
       ed.select([created]);
+      if (target) ed.flash(t("body.added", { name: ed.doc.bodies[target].name }));
     },
   },
   {

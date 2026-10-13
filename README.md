@@ -37,7 +37,7 @@ Pushing to `main` deploys to GitHub Pages (Settings → Pages → Source: GitHub
 | Ctrl+Z / Ctrl+Y | Undo / redo |
 | Ctrl+S / Ctrl+O | Save / open a `.kinemo.json` file |
 | Shift+N | New sketch |
-| G | Group the selected lines, arcs, circles and points into a body |
+| G | Group the selected lines, arcs, circles and points into a body. With one part of an existing body (or the body) selected too, add the rest to that body. Each item is in one body only |
 | Shift+G | Toggle ground on the selected body |
 | Shift+I | Solid or see-through bars |
 | Tab | Switch between Sketch and Motion |

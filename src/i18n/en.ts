@@ -37,6 +37,9 @@ export const en: Record<string, string> = {
   "action.mode": "Switch Sketch / Motion",
 
   "body.name": "Body",
+  "body.added": "Added to {name}.",
+  "body.twoBodies": "That touches two bodies. A line can only be in one body: select the new parts and one part of the body to add them to.",
+  "body.nothingToAdd": "Everything selected is already in that body.",
   "body.ground": "Ground (doesn't move)",
   "body.groundTag": "ground",
   "body.fixedTag": "fixed",
@@ -46,7 +49,7 @@ export const en: Record<string, string> = {
   "body.members": "Items",
   "body.ungroup": "Ungroup",
   "body.none": "Select lines and press G to group them into a body.",
-  "hint.makeBody": "Select lines, arcs, circles or points, then press G to group them into one body.",
+  "hint.makeBody": "Select lines, arcs, circles or points, then press G to group them into one body. To add to a body, select the new parts and one part of the body, then press G.",
   "hint.ground": "Select a body (or something in it), then press Shift+G.",
 
   "joint.pin": "Pin",
