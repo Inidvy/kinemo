@@ -384,8 +384,6 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
   /** A video being recorded, and how far a GIF has got (null when none is being made). */
   let video: MediaRecorder | null = null;
   let gifProgress: number | null = null;
-  /** The clip settings pop-up is open. */
-  let menuOpen = false;
   let lastFlags = "";
 
   const lanes = () => el.querySelector<HTMLElement>(".tl-lanes");
@@ -488,17 +486,14 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
         </span>
         ${editor}
         <span class="tl-spacer"></span>
-        <details class="tl-menu"${menuOpen ? " open" : ""}>
-          <summary class="btn">${icons.clock}${t("timeline.clip")}</summary>
-          <div class="tl-pop">
-            <label>${t("timeline.length")}<input type="number" min="0.1" step="0.5" data-tl="length" value="${tl.length}"> s</label>
-            <label>${t("timeline.playMode")}<select data-tl="mode">
-              ${(["once", "loop", "pingpong"] as const).map((m) => `<option value="${m}"${tl.mode === m ? " selected" : ""}>${t(`timeline.${m}`)}</option>`).join("")}
-            </select></label>
-            <label title="${t("record.leadInTip")}">${t("record.leadIn")}<input type="number" min="0" max="30" step="1" data-tl="lead" value="${p.leadIn}"> s</label>
-            <button class="btn tl-delall" data-tl="delall" ${anyKeys && !busy ? "" : "disabled"}>${icons.delete}${t("timeline.deleteAll")}</button>
-          </div>
-        </details>
+        <span class="tl-group tl-clip">
+          <label title="${t("timeline.lengthTip")}">${t("timeline.length")}<input type="number" min="0.1" step="0.5" data-tl="length" value="${tl.length}"> s</label>
+          <select data-tl="mode" title="${t("timeline.playMode")}">
+            ${(["once", "loop", "pingpong"] as const).map((m) => `<option value="${m}"${tl.mode === m ? " selected" : ""}>${t(`timeline.${m}`)}</option>`).join("")}
+          </select>
+          <label title="${t("record.leadInTip")}">${t("record.leadIn")}<input type="number" min="0" max="30" step="1" data-tl="lead" value="${p.leadIn}"> s</label>
+          <button class="icon-btn tl-delall" data-tl="delall" ${anyKeys && !busy ? "" : "disabled"} title="${t("timeline.deleteAll")}">${icons.delete}</button>
+        </span>
         <span class="tl-group tl-export">
           <span class="muted">${t("export.title")}</span>
           <button class="btn" data-tl="gif" ${anyKeys && !busy ? "" : "disabled"} title="${t("export.gifTip")}">${gifProgress !== null ? `${Math.round(gifProgress * 100)}%` : "GIF"}</button>
@@ -561,10 +556,7 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
       b.blur();
       if (what === "play") p.toggle();
       if (what === "stop") p.toStart();
-      if (what === "delall") {
-        menuOpen = false;
-        p.deleteAllKeys();
-      }
+      if (what === "delall") p.deleteAllKeys();
       if (what === "key") p.key();
       if (what === "video") {
         if (video) p.stop();
@@ -590,10 +582,6 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
     // Shift- or Ctrl-click adds a slider to the selection, so a key goes to several at once.
     if (name) ed.select([name.dataset.pick!], e.shiftKey || e.ctrlKey || e.metaKey);
   });
-
-  el.addEventListener("toggle", (e) => {
-    if ((e.target as HTMLElement).matches(".tl-menu")) menuOpen = (e.target as HTMLDetailsElement).open;
-  }, true);
 
   el.addEventListener("change", (e) => {
     const input = e.target as HTMLInputElement;
