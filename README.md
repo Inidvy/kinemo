@@ -25,7 +25,7 @@ Pushing to `main` deploys to GitHub Pages (Settings → Pages → Source: GitHub
 | C | Circle |
 | O | Point |
 | R / Shift+R | Rectangle by two corners / by centre and corner |
-| D | Dimension: click geometry, then click where the label goes, type a value |
+| D | Dimension: click geometry (or select it first), a preview follows the cursor, click where the label goes, type a value |
 | E | Coincident (two points), or point on curve (points and one line, circle or arc) |
 | H V P T | Horizontal, vertical, parallel, tangent |
 | N Q U Z Y W | Perpendicular, equal, midpoint, concentric, symmetric, fix |
@@ -41,7 +41,9 @@ Pushing to `main` deploys to GitHub Pages (Settings → Pages → Source: GitHub
 
 Constraint keys work both ways: select items first and press the key, or press the key first and then click the items (it stays active for the next ones until Esc). The right panel lists the constraints that fit the current selection, and every toolbar button shows its key. Middle- or right-drag pans, the wheel zooms, and two fingers pan and pinch on touch screens.
 
-Line colour shows status: blue is still free to move, black is fully defined, red is a conflicting constraint.
+Line colour shows status: blue is still free to move, black is fully defined.
+
+Over-constraining is allowed. The newest constraint that causes it is shown in dark red and isn't applied, so the rest of the sketch keeps working; every other constraint whose removal would also fix it is shown in light red. A banner explains it and offers to remove the newest one. Drag steps that would collapse geometry or leave the sketch over-constrained are skipped, so dragging never causes it.
 
 ## Adding a feature
 

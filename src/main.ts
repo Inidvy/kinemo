@@ -8,8 +8,10 @@ import { mountToolbar } from "./ui/toolbar";
 import { mountKeys } from "./ui/keys";
 import { mountFeatureTree, mountProperties } from "./ui/panels";
 import { mountDimEditor } from "./ui/dimEditor";
+import { mountWarning } from "./ui/warning";
 import { tools } from "./tools";
 import { t } from "./i18n";
+import { svgIcon, iconPaths } from "./ui/icons";
 
 async function main() {
   const solver = await Solver.create(wasmUrl);
@@ -25,13 +27,14 @@ async function main() {
   mountFeatureTree($("#left"), ed);
   mountProperties($("#right"), ed);
   mountDimEditor($("#canvas-wrap"), ed);
+  mountWarning($("#warning"), ed);
   mountKeys(ed);
 
   // Bottom tabs, like Onshape's Part Studio / Assembly tabs.
   const tabs = $("#tabs");
   tabs.innerHTML = `
-    <button class="tab on" data-mode="sketch">✎ ${t("tab.sketch")}</button>
-    <button class="tab" data-mode="motion" disabled title="${t("tab.motionSoon")}">⟳ ${t("tab.motion")}</button>`;
+    <button class="tab on" data-mode="sketch">${svgIcon(iconPaths.sketch, 14)} ${t("tab.sketch")}</button>
+    <button class="tab" data-mode="motion" disabled title="${t("tab.motionSoon")}">${svgIcon(iconPaths.motion, 14)} ${t("tab.motion")}</button>`;
 
   const status = $("#status");
   let saveTimer = 0;

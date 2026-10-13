@@ -5,6 +5,7 @@ import { tools } from "../tools";
 import { colors } from "./style";
 import { ICON, layoutDims, layoutIcons, linearOffset, type DimLayout } from "./layout";
 import type { View } from "./view";
+import { drawConstraintIcon } from "../ui/icons";
 
 /** Draws the sketch. Stateless: everything comes from the editor. */
 export function render(ctx: CanvasRenderingContext2D, ed: Editor, w: number, h: number): void {
@@ -25,20 +26,24 @@ export function render(ctx: CanvasRenderingContext2D, ed: Editor, w: number, h: 
     const c = id ? doc.constraints[id] : undefined;
     if (c) c.refs.forEach((r) => set.add(r));
   }
-  const conflictGeom = new Set<Id>();
-  for (const cid of ed.analysis.conflicting) doc.constraints[cid]?.refs.forEach((r) => conflictGeom.add(r));
+  // Over-constraint: the newest culprit and what it touches in dark red, the
+  // other constraints that would also fix it in light red.
+  const badRef = new Map<Id, string>();
+  for (const cid of ed.analysis.fixes) doc.constraints[cid]?.refs.forEach((r) => badRef.set(r, colors.conflictSoft));
+  for (const cid of ed.analysis.culprits) doc.constraints[cid]?.refs.forEach((r) => badRef.set(r, colors.conflict));
+  const badCons = (cid: Id) => (ed.analysis.culprits.has(cid) ? colors.conflict : ed.analysis.fixes.has(cid) ? colors.conflictSoft : null);
 
   for (const g of Object.values(doc.geoms)) {
     const isSel = ed.selection.has(g.id) || selRefs.has(g.id);
     const isHover = ed.hover === g.id || hoverRefs.has(g.id);
-    drawGeom(ctx, ed, g, isSel, isHover, conflictGeom.has(g.id));
+    drawGeom(ctx, ed, g, isSel, isHover, badRef.get(g.id) ?? null);
   }
 
   for (const p of Object.values(doc.points)) {
     const s = v.toScreen(p);
     const sel = ed.selection.has(p.id) || selRefs.has(p.id);
     const hov = ed.hover === p.id || hoverRefs.has(p.id);
-    ctx.fillStyle = sel ? colors.selected : hov ? colors.hover : ed.analysis.free.has(p.id) ? colors.free : colors.defined;
+    ctx.fillStyle = sel ? colors.selected : hov ? colors.hover : (badRef.get(p.id) ?? (ed.analysis.free.has(p.id) ? colors.free : colors.defined));
     ctx.beginPath();
     ctx.arc(s.x, s.y, sel || hov ? 4 : 2.6, 0, Math.PI * 2);
     ctx.fill();
@@ -46,26 +51,30 @@ export function render(ctx: CanvasRenderingContext2D, ed: Editor, w: number, h: 
 
   for (const d of layoutDims(doc, v)) {
     const c = doc.constraints[d.cid];
-    drawDimension(ctx, v, d, ed.selection.has(c.id), ed.hover === c.id, ed.analysis.conflicting.has(c.id));
+    drawDimension(ctx, v, d, ed.selection.has(c.id), ed.hover === c.id, badCons(c.id));
   }
 
   if (doc.settings.showConstraintIcons) {
     for (const b of layoutIcons(doc, v)) {
       const sel = ed.selection.has(b.cid);
       const hov = ed.hover === b.cid;
-      const bad = ed.analysis.conflicting.has(b.cid);
+      const bad = badCons(b.cid);
       ctx.fillStyle = sel ? colors.selected : hov ? colors.hover : colors.iconBg;
-      ctx.strokeStyle = bad ? colors.conflict : colors.iconBorder;
+      ctx.strokeStyle = bad ?? colors.iconBorder;
       ctx.lineWidth = 1;
       ctx.setLineDash([]);
       roundRect(ctx, b.x, b.y, ICON, ICON, 3);
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = sel || hov ? "#fff" : bad ? colors.conflict : colors.iconText;
-      ctx.font = "11px system-ui, sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(b.glyph, b.x + ICON / 2, b.y + ICON / 2 + 0.5);
+      const ink = sel || hov ? "#fff" : (bad ?? colors.iconText);
+      ctx.strokeStyle = ink;
+      if (!drawConstraintIcon(ctx, b.type, b.x + 2, b.y + 2, ICON - 4)) {
+        ctx.fillStyle = ink;
+        ctx.font = "11px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(b.glyph, b.x + ICON / 2, b.y + ICON / 2 + 0.5);
+      }
     }
   }
 
@@ -109,14 +118,14 @@ function drawGrid(ctx: CanvasRenderingContext2D, v: View, w: number, h: number) 
   ctx.stroke();
 }
 
-function geomColor(ed: Editor, g: Geometry, conflict: boolean): string {
-  if (conflict) return colors.conflict;
+function geomColor(ed: Editor, g: Geometry, bad: string | null): string {
+  if (bad) return bad;
   if (g.track) return colors.track;
   const free = geomPoints(g).some((p) => ed.analysis.free.has(p)) || ed.analysis.freeRadii.has(g.id);
   return free ? colors.free : colors.defined;
 }
 
-function drawGeom(ctx: CanvasRenderingContext2D, ed: Editor, g: Geometry, sel: boolean, hover: boolean, conflict: boolean) {
+function drawGeom(ctx: CanvasRenderingContext2D, ed: Editor, g: Geometry, sel: boolean, hover: boolean, bad: string | null) {
   const v = ed.view;
   const doc = ed.doc;
   ctx.setLineDash(g.construction ? [6, 4] : []);
@@ -144,7 +153,7 @@ function drawGeom(ctx: CanvasRenderingContext2D, ed: Editor, g: Geometry, sel: b
     ctx.stroke();
     ctx.globalAlpha = 1;
   }
-  ctx.strokeStyle = sel ? colors.selected : geomColor(ed, g, conflict);
+  ctx.strokeStyle = sel ? colors.selected : geomColor(ed, g, bad);
   ctx.lineWidth = g.track ? 2.5 : g.construction ? 1.2 : 1.6;
   path();
   ctx.stroke();
@@ -162,15 +171,16 @@ function arrow(ctx: CanvasRenderingContext2D, at: Vec, dir: Vec) {
   ctx.fill();
 }
 
-function drawDimension(
+export function drawDimension(
   ctx: CanvasRenderingContext2D,
   v: View,
   d: DimLayout,
   sel: boolean,
   hover: boolean,
-  bad: boolean,
+  bad: string | null,
+  ink: string = colors.dimension,
 ) {
-  const color = bad ? colors.conflict : sel ? colors.selected : hover ? colors.hover : colors.dimension;
+  const color = bad ?? (sel ? colors.selected : hover ? colors.hover : ink);
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
   ctx.lineWidth = 1;

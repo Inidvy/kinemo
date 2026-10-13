@@ -93,7 +93,10 @@ export const en: Record<string, string> = {
 
   "status.fullyDefined": "Fully defined",
   "status.dof": "{n} degrees of freedom",
-  "status.conflict": "Conflicting constraints",
+  "status.conflict": "Over-constrained",
+  "warn.culprit": "Over-constrained: {name} clashes with other constraints, so it isn't applied. Remove it, or remove one of the light red constraints instead.",
+  "warn.noCulprit": "Over-constrained: remove one of the red constraints to make the sketch solve.",
+  "warn.remove": "Remove {name}",
 
   "geom.line": "Line",
   "geom.circle": "Circle",

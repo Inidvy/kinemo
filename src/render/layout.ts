@@ -4,13 +4,14 @@ import type { DimensionShape } from "../constraints/types";
 import { add, dot, mid, norm, perp, sub } from "../core/geom";
 import type { View } from "./view";
 
-export const ICON = 16;
+export const ICON = 18;
 
 export interface IconBox {
   cid: Id;
   x: number;
   y: number;
   glyph: string;
+  type: string;
 }
 
 /**
@@ -32,7 +33,7 @@ export function layoutIcons(doc: SketchDoc, view: View): IconBox[] {
   const out: IconBox[] = [];
   for (const { at, items } of groups.values()) {
     items.forEach((c, i) => {
-      out.push({ cid: c.id, x: at.x + 8 + i * (ICON + 2), y: at.y - 8 - ICON, glyph: constraintTypes.get(c.type).glyph });
+      out.push({ cid: c.id, x: at.x + 8 + i * (ICON + 2), y: at.y - 8 - ICON, glyph: constraintTypes.get(c.type).glyph, type: c.type });
     });
   }
   return out;

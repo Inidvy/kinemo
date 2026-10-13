@@ -3,7 +3,7 @@ import { deleteItems, emptyDoc } from "../core/model";
 import type { Editor } from "../app/editor";
 import { constraintTypes } from "../constraints";
 import { downloadDoc, pickFile } from "../io/file";
-import { icons, glyphIcon } from "./icons";
+import { icons, constraintIcon } from "./icons";
 import { pendingConstraint, startConstraintPick } from "../tools/constraintPick";
 import { setTool } from "./toolbar";
 
@@ -104,7 +104,7 @@ for (const c of constraintTypes.all()) {
   actions.register({
     id: `constraint:${c.id}`,
     label: c.label,
-    icon: glyphIcon(c.glyph),
+    icon: constraintIcon(c.id, c.glyph),
     shortcut: c.shortcut,
     group: "constraint",
     // Apply to the selection if it fits; otherwise pick the items next.

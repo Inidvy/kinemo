@@ -7,6 +7,8 @@ export const colors = {
   free: "#2069e0",
   defined: "#1d1f24",
   conflict: "#d93025",
+  /** Other constraints that would also fix an over-constraint. */
+  conflictSoft: "#f08a80",
   track: "#8e44ad",
   selected: "#f28c18",
   hover: "#5aa7ff",

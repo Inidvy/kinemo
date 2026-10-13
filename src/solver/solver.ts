@@ -84,6 +84,35 @@ export class Solver {
     };
   }
 
+  /** True when the solve succeeded with no conflicting or redundant constraints. */
+  static clean(r: SolveResult): boolean {
+    return r.ok && r.conflicting.length === 0 && r.redundant.length === 0;
+  }
+
+  /** Solve as if some constraints weren't there, keeping them in the returned document. */
+  solveWithout(doc: SketchDoc, ignore: Iterable<Id>, drag: DragTarget[] = []): SolveResult {
+    const skip = new Set(ignore);
+    if (skip.size === 0) return this.solve(doc, drag);
+    const r = this.solve(without(doc, skip), drag);
+    const out = cloneDoc(doc);
+    out.points = r.doc.points;
+    for (const g of Object.values(r.doc.geoms)) if (g.kind === "circle") (out.geoms[g.id] as typeof g).r = g.r;
+    return { ...r, doc: out };
+  }
+
+  /**
+   * For an over-constrained sketch: every constraint whose removal on its own
+   * makes the sketch solve cleanly again.
+   */
+  fixes(doc: SketchDoc): Id[] {
+    const ids = Object.keys(doc.constraints);
+    if (ids.length > MAX_FIX_SCAN) {
+      const r = this.solve(doc);
+      return [...new Set([...r.conflicting, ...r.redundant])];
+    }
+    return ids.filter((id) => Solver.clean(this.solve(without(doc, new Set([id])))));
+  }
+
   /**
    * Which points can still move. A point is free if a small soft pull in x or
    * y moves it. Used to colour under-defined geometry.
@@ -126,6 +155,35 @@ export class Solver {
 
 /** Weight of the soft hold on points that are not being dragged. */
 const HOLD = 0.01;
+/** Above this many constraints, trust the solver's own list instead of testing each removal. */
+const MAX_FIX_SCAN = 400;
+
+function without(doc: SketchDoc, skip: Set<Id>): SketchDoc {
+  const d = cloneDoc(doc);
+  for (const id of skip) delete d.constraints[id];
+  return d;
+}
+
+/**
+ * A drag step that collapses a line, circle or arc to nothing, or throws
+ * points far away, is the solver escaping into a degenerate answer rather
+ * than a pose the user wants. Such steps are skipped.
+ */
+export function degenerate(before: SketchDoc, after: SketchDoc): boolean {
+  const len = (d: SketchDoc, a: Id, b: Id) => Math.hypot(d.points[a].x - d.points[b].x, d.points[a].y - d.points[b].y);
+  for (const p of Object.values(after.points)) {
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y) || Math.abs(p.x) > 1e6 || Math.abs(p.y) > 1e6) return true;
+  }
+  const tiny = 1e-4;
+  for (const g of Object.values(after.geoms)) {
+    const g0 = before.geoms[g.id];
+    if (!g0) continue;
+    if (g.kind === "line" && g0.kind === "line" && len(after, g.p1, g.p2) < tiny && len(before, g.p1, g.p2) >= tiny) return true;
+    if (g.kind === "circle" && g0.kind === "circle" && Math.abs(g.r) < tiny && Math.abs(g0.r) >= tiny) return true;
+    if (g.kind === "arc" && g0.kind === "arc" && len(after, g.c, g.s) < tiny && len(before, g.c, g.s) >= tiny) return true;
+  }
+  return false;
+}
 
 export function toPrimitives(doc: SketchDoc): Primitive[] {
   const prims: Primitive[] = [];

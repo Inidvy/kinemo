@@ -1,6 +1,6 @@
 import { History } from "../core/history";
 import { cloneDoc, emptyDoc, type Id, type SketchDoc } from "../core/model";
-import type { DragTarget, Solver } from "../solver/solver";
+import { degenerate, Solver, type DragTarget } from "../solver/solver";
 import { View } from "../render/view";
 import { constraintTypes } from "../constraints";
 import { t } from "../i18n";
@@ -9,8 +9,17 @@ export interface Analysis {
   dof: number;
   free: Set<Id>;
   freeRadii: Set<Id>;
+  /** Every constraint drawn red: the culprits plus the other fixes. */
   conflicting: Set<Id>;
+  /** The most recently added or edited constraints that cause the over-constraint (dark red). */
+  culprits: Set<Id>;
+  /** Other constraints whose removal would also fix it (light red). */
+  fixes: Set<Id>;
+  /** The sketch can't be solved with all its constraints. */
+  over: boolean;
 }
+
+const emptyAnalysis = (): Analysis => ({ dof: 0, free: new Set(), freeRadii: new Set(), conflicting: new Set(), culprits: new Set(), fixes: new Set(), over: false });
 
 export type Mode = "sketch" | "motion";
 
@@ -28,7 +37,9 @@ export class Editor {
   message = "";
   /** Set by the UI: open the value editor for a dimension. */
   onEditDimension?: (cid: Id) => void;
-  analysis: Analysis = { dof: 0, free: new Set(), freeRadii: new Set(), conflicting: new Set() };
+  analysis: Analysis = emptyAnalysis();
+  /** Constraints added or edited by the latest change: the suspects when the sketch becomes over-constrained. */
+  recent = new Set<Id>();
 
   private listeners = new Set<() => void>();
   private analysisTimer = 0;
@@ -56,15 +67,31 @@ export class Editor {
     const before = this.doc;
     const next = cloneDoc(before);
     mutate(next);
+    const touched = changedConstraints(before, next);
+    if (touched.size) this.recent = touched;
+    else for (const id of [...this.recent]) if (!(id in next.constraints)) this.recent.delete(id);
     const r = this.solver.solve(next);
-    // With conflicting constraints the solver may find a degenerate answer
-    // (a line collapsed to a point). Keep the geometry as drawn and show the
-    // conflict in red instead, like Onshape.
-    const clean = r.ok && r.conflicting.length === 0 && r.redundant.length === 0;
-    this.history.record(before, clean ? r.doc : next);
+    let result = next;
+    if (Solver.clean(r)) result = r.doc;
+    else {
+      // Over-constrained is allowed: solve everything except the newest
+      // constraints so the rest of the sketch keeps behaving, and show the
+      // problem in red. If that doesn't help, keep the geometry as drawn
+      // rather than accept a degenerate answer (a line collapsed to a point).
+      const rest = this.solver.solveWithout(next, this.ignored(next));
+      if (Solver.clean(rest)) result = rest.doc;
+    }
+    this.history.record(before, result);
     this.pruneSelection();
     this.reanalyse();
     this.emit();
+  }
+
+  /** Constraints left out of solving while the sketch is over-constrained. */
+  private ignored(doc: SketchDoc): Id[] {
+    const rec = [...this.recent].filter((id) => id in doc.constraints);
+    if (rec.length) return rec;
+    return [...this.analysis.conflicting].filter((id) => id in doc.constraints);
   }
 
   /** Live preview during a drag; call `endDrag` to make it undoable. */
@@ -75,8 +102,12 @@ export class Editor {
   }
 
   drag(targets: DragTarget[]): void {
-    const r = this.solver.solve(this.doc, targets);
-    if (r.ok) this.history.replace(r.doc);
+    const doc = this.doc;
+    const r = this.analysis.over ? this.solver.solveWithout(doc, this.ignored(doc), targets) : this.solver.solve(doc, targets);
+    // Skip steps where the solver escapes into a collapsed or exploded
+    // answer, or into a pose where constraints become dependent: the sketch
+    // stays at its last good pose instead of turning red.
+    if (r.ok && !degenerate(doc, r.doc) && (this.analysis.over || Solver.clean(this.solver.solve(r.doc)))) this.history.replace(r.doc);
     this.emit();
   }
 
@@ -109,6 +140,7 @@ export class Editor {
 
   load(doc: SketchDoc): void {
     this.history.reset(doc);
+    this.recent.clear();
     this.selection.clear();
     this.afterLoad();
   }
@@ -175,13 +207,45 @@ export class Editor {
     this.analysisTimer = window.setTimeout(() => {
       const doc = this.doc;
       const r = this.solver.solve(doc);
+      const over = !Solver.clean(r);
+      let culprits = new Set<Id>();
+      let fixes = new Set<Id>();
+      let solvable = doc;
+      if (over) {
+        const all = this.solver.fixes(doc);
+        const flagged = all.length ? all : [...new Set([...r.conflicting, ...r.redundant])];
+        culprits = new Set(flagged.filter((id) => this.recent.has(id)));
+        fixes = new Set(flagged.filter((id) => !culprits.has(id)));
+        const skip = culprits.size ? culprits : fixes;
+        solvable = { ...doc, constraints: Object.fromEntries(Object.entries(doc.constraints).filter(([id]) => !skip.has(id))) };
+      }
       this.analysis = {
-        dof: r.dof,
-        free: this.solver.freePoints(doc),
-        freeRadii: this.solver.freeRadii(doc),
-        conflicting: new Set([...r.conflicting, ...r.redundant]),
+        dof: this.solver.solve(solvable).dof,
+        free: this.solver.freePoints(solvable),
+        freeRadii: this.solver.freeRadii(solvable),
+        conflicting: new Set([...culprits, ...fixes]),
+        culprits,
+        fixes,
+        over,
       };
       this.emit();
     }, 30);
   }
+
+  /** Remove the constraints that make the sketch over-constrained (the culprits). */
+  removeCulprits(): void {
+    const ids = [...this.analysis.culprits];
+    if (!ids.length) return;
+    this.change((doc) => ids.forEach((id) => delete doc.constraints[id]));
+  }
+}
+
+/** Constraints that are new in `after` or whose value changed. */
+function changedConstraints(before: SketchDoc, after: SketchDoc): Set<Id> {
+  const out = new Set<Id>();
+  for (const c of Object.values(after.constraints)) {
+    const old = before.constraints[c.id];
+    if (!old || old.value !== c.value) out.add(c.id);
+  }
+  return out;
 }

@@ -96,8 +96,8 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
@@ -113,8 +113,8 @@ body {
 
 .tb kbd {
   position: absolute;
-  right: 1px;
-  bottom: 0;
+  right: 2px;
+  bottom: 1px;
   font-family: inherit;
   font-size: 8px;
   line-height: 1;
@@ -424,6 +424,9 @@ details summary {
 }
 
 .tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: 1px solid transparent;
   border-top: none;
   background: transparent;
@@ -467,4 +470,84 @@ details summary {
   #doc-name {
     display: none;
   }
+}
+
+/* Lucide-style icons inside lists and chips. */
+.row svg,
+.chip svg,
+.prop-head svg {
+  flex: none;
+  margin-right: 6px;
+  color: #59616e;
+}
+
+.row.bad svg {
+  color: var(--bad);
+}
+
+.sketch-icon svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.row.bad-soft {
+  color: #e0675c;
+}
+
+.row.bad-soft svg {
+  color: #e0675c;
+}
+
+/* Over-constraint warning across the top of the canvas. */
+#warning {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(640px, calc(100% - 20px));
+  padding: 8px 10px 8px 12px;
+  border: 1px solid #f3b3ad;
+  border-radius: 6px;
+  background: #fdecea;
+  color: #8c1d14;
+  font-size: 12px;
+  line-height: 1.4;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+#warning[hidden] {
+  display: none;
+}
+
+#warning svg {
+  flex: none;
+  color: var(--bad);
+}
+
+#warning button {
+  flex: none;
+  border: 1px solid var(--bad);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--bad);
+  font: inherit;
+  padding: 3px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+#warning button:hover {
+  background: var(--bad);
+  color: #fff;
+}
+
+/* Leave the bottom-right corner of each toolbar button for its key. */
+.tb svg {
+  width: 18px;
+  height: 18px;
+  transform: translate(-2px, -2px);
 }

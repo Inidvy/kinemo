@@ -5,6 +5,7 @@ import { constraintTypes } from "../constraints";
 import { formatValue } from "../render/layout";
 import { t } from "../i18n";
 import { actions } from "./actions";
+import { constraintIcon, icons } from "./icons";
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -12,7 +13,7 @@ function geomName(g: Geometry, index: number): string {
   return `${t(`geom.${g.kind}`)} ${index}`;
 }
 
-function constraintName(ed: Editor, id: Id): string {
+export function constraintName(ed: Editor, id: Id): string {
   const c = ed.doc.constraints[id];
   const def = constraintTypes.get(c.type);
   return def.dimension ? `${t(def.label)} ${formatValue(c)}` : t(def.label);
@@ -36,7 +37,7 @@ export function mountFeatureTree(el: HTMLElement, ed: Editor): void {
   const update = () => {
     const a = ed.analysis;
     const status =
-      a.conflicting.size > 0
+      a.over
         ? `<span class="status bad">${t("status.conflict")}</span>`
         : a.dof === 0
           ? `<span class="status ok">${t("status.fullyDefined")}</span>`
@@ -52,14 +53,14 @@ export function mountFeatureTree(el: HTMLElement, ed: Editor): void {
     const cons = Object.values(ed.doc.constraints)
       .map((c) => {
         const def = constraintTypes.get(c.type);
-        const bad = a.conflicting.has(c.id) ? " bad" : "";
-        return row(c.id, `<span class="glyph">${esc(def.glyph)}</span>${esc(constraintName(ed, c.id))}`, bad, true);
+        const bad = a.culprits.has(c.id) ? " bad" : a.fixes.has(c.id) ? " bad-soft" : "";
+        return row(c.id, `${constraintIcon(def.id, esc(def.glyph), 14)}${esc(constraintName(ed, c.id))}`, bad, true);
       })
       .join("");
     el.innerHTML = `
       <div class="panel-title">${t("panel.features")}</div>
       <div class="feature">
-        <div class="feature-head"><span class="sketch-icon">✎</span>${t("panel.sketch")}${status}</div>
+        <div class="feature-head"><span class="sketch-icon">${icons.sketch}</span>${t("panel.sketch")}${status}</div>
         <details open><summary>${t("panel.geometry")} <span class="count">${Object.keys(ed.doc.geoms).length}</span></summary>${geoms}</details>
         <details open><summary>${t("panel.constraints")} <span class="count">${Object.keys(ed.doc.constraints).length}</span></summary>${cons}</details>
       </div>`;
@@ -110,7 +111,7 @@ export function mountProperties(el: HTMLElement, ed: Editor): void {
     } else if (sel.length === 1 && doc.constraints[sel[0]]) {
       const c = doc.constraints[sel[0]];
       const def = constraintTypes.get(c.type);
-      html += `<div class="prop-head"><span class="glyph">${esc(def.glyph)}</span>${t(def.label)}</div>`;
+      html += `<div class="prop-head">${constraintIcon(def.id, esc(def.glyph), 16)}${t(def.label)}</div>`;
       if (def.dimension) {
         html += `<label class="field">${t("panel.value")} (${def.unit === "deg" ? "°" : "mm"})<input type="number" step="any" data-field="value" data-id="${c.id}" value="${c.value}"></label>`;
       }
@@ -140,7 +141,7 @@ export function mountProperties(el: HTMLElement, ed: Editor): void {
       if (fits.length) {
         html += `<div class="panel-title">${t("panel.addConstraint")}</div><div class="chips">`;
         html += fits
-          .map((c) => `<button class="chip" data-apply="${c.id}"><span class="glyph">${esc(c.glyph)}</span>${t(c.label)}${c.shortcut ? `<kbd>${c.shortcut.toUpperCase()}</kbd>` : ""}</button>`)
+          .map((c) => `<button class="chip" data-apply="${c.id}">${constraintIcon(c.id, esc(c.glyph), 14)}${t(c.label)}${c.shortcut ? `<kbd>${c.shortcut.toUpperCase()}</kbd>` : ""}</button>`)
           .join("");
         html += `</div>`;
       }
