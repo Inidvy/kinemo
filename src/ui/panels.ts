@@ -6,6 +6,7 @@ import { formatValue } from "../render/layout";
 import { t } from "../i18n";
 import { actions } from "./actions";
 import { constraintIcon, icons } from "./icons";
+import { bodiesSection, bodyProps, motionProps, motionTree, patchSliders, wireMotionPanel } from "./motionPanels";
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -35,13 +36,17 @@ export function mountFeatureTree(el: HTMLElement, ed: Editor): void {
   });
 
   const update = () => {
+    if (ed.mode === "motion") {
+      el.innerHTML = motionTree(ed);
+      return;
+    }
     const a = ed.analysis;
     const status =
       a.over
         ? `<span class="status bad">${t("status.conflict")}</span>`
         : a.dof === 0
           ? `<span class="status ok">${t("status.fullyDefined")}</span>`
-          : `<span class="status free">${t("status.dof", { n: a.dof })}</span>`;
+          : `<span class="status free">${t(a.dof === 1 ? "status.dof1" : "status.dof", { n: a.dof })}</span>`;
     const counts: Record<string, number> = {};
     const geoms = Object.values(ed.doc.geoms)
       .map((g) => {
@@ -63,6 +68,7 @@ export function mountFeatureTree(el: HTMLElement, ed: Editor): void {
         <div class="feature-head"><span class="sketch-icon">${icons.sketch}</span>${t("panel.sketch")}${status}</div>
         <details open><summary>${t("panel.geometry")} <span class="count">${Object.keys(ed.doc.geoms).length}</span></summary>${geoms}</details>
         <details open><summary>${t("panel.constraints")} <span class="count">${Object.keys(ed.doc.constraints).length}</span></summary>${cons}</details>
+        ${bodiesSection(ed)}
       </div>`;
   };
 
@@ -92,14 +98,27 @@ export function mountProperties(el: HTMLElement, ed: Editor): void {
       if (Number.isFinite(v) && v > 0) ed.change((doc) => (doc.constraints[id].value = v));
     } else if (field === "construction" || field === "track") {
       ed.change((doc) => (doc.geoms[id][field] = input.checked));
+    } else if (field === "bodyName") {
+      const name = input.value.trim();
+      if (name) ed.change((doc) => (doc.bodies[id].name = name));
+    } else if (field === "ground") {
+      ed.change((doc) => (doc.bodies[id].ground = input.checked));
     } else if (field === "barWidth") {
       const v = parseFloat(input.value);
       if (Number.isFinite(v) && v > 0) ed.change((doc) => (doc.settings.barWidth = v));
     }
   });
 
+  wireMotionPanel(el, ed, (id) => actions.get(id).run(ed));
+
   const update = () => {
-    if (document.activeElement && el.contains(document.activeElement)) return;
+    const focused = document.activeElement && el.contains(document.activeElement);
+    if (ed.mode === "motion") {
+      if (focused) patchSliders(el, ed);
+      else el.innerHTML = motionProps(ed);
+      return;
+    }
+    if (focused) return;
     const doc = ed.doc;
     const sel = [...ed.selection];
     let html = `<div class="panel-title">${t("panel.properties")}</div>`;
@@ -116,6 +135,8 @@ export function mountProperties(el: HTMLElement, ed: Editor): void {
         html += `<label class="field">${t("panel.value")} (${def.unit === "deg" ? "°" : "mm"})<input type="number" step="any" data-field="value" data-id="${c.id}" value="${c.value}"></label>`;
       }
       html += `<button class="btn danger" data-delete="1">${t("panel.delete")}</button>`;
+    } else if (sel.length === 1 && doc.bodies[sel[0]]) {
+      html += bodyProps(ed, doc.bodies[sel[0]]);
     } else if (sel.length === 1 && doc.geoms[sel[0]]) {
       const g = doc.geoms[sel[0]];
       html += `<div class="prop-head">${t(`geom.${g.kind}`)}</div>`;

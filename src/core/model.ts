@@ -61,6 +61,40 @@ export interface Constraint {
 export interface Settings {
   barWidth: number;
   showConstraintIcons: boolean;
+  /** Draw bars solid instead of see-through in Sketch mode. */
+  solidBars: boolean;
+}
+
+/** A rigid group of sketch geometry. In Motion mode it moves as one bar. */
+export interface Body {
+  id: Id;
+  name: string;
+  /** Geometry (and loose point) ids that belong to the body. */
+  members: Id[];
+  /** Ground bodies never move. */
+  ground?: boolean;
+}
+
+/** Where a body is in Motion mode: rotation `a` (radians) about the origin, then shift by (x, y). */
+export interface Pose {
+  x: number;
+  y: number;
+  a: number;
+}
+
+/** A slider the user drives: the motion of body `b` relative to body `a` at a joint. */
+export interface Driver {
+  id: Id;
+  /** The joint, which is the id of the sketch constraint that makes it. */
+  joint: Id;
+  a: Id;
+  b: Id;
+}
+
+export interface MotionState {
+  /** Missing bodies sit where they were sketched. */
+  poses: Record<Id, Pose>;
+  drivers: Record<Id, Driver>;
 }
 
 export interface SketchDoc {
@@ -70,9 +104,11 @@ export interface SketchDoc {
   constraints: Record<Id, Constraint>;
   nextId: number;
   settings: Settings;
+  bodies: Record<Id, Body>;
+  motion: MotionState;
 }
 
-export const DOC_VERSION = 1;
+export const DOC_VERSION = 2;
 
 export function emptyDoc(): SketchDoc {
   return {
@@ -81,7 +117,9 @@ export function emptyDoc(): SketchDoc {
     geoms: {},
     constraints: {},
     nextId: 1,
-    settings: { barWidth: 8, showConstraintIcons: true },
+    settings: { barWidth: 8, showConstraintIcons: true, solidBars: false },
+    bodies: {},
+    motion: { poses: {}, drivers: {} },
   };
 }
 
@@ -162,6 +200,21 @@ export function deleteItems(doc: SketchDoc, ids: Id[]): void {
   const gone = new Set([...pointIds, ...geomIds]);
   for (const c of Object.values(doc.constraints)) {
     if (c.refs.some((r) => gone.has(r))) delete doc.constraints[c.id];
+  }
+  for (const id of ids) delete doc.bodies[id];
+  for (const id of ids) delete doc.motion.drivers[id];
+  pruneBodies(doc);
+}
+
+/** Drop body members, empty bodies, poses and drivers that point at things that are gone. */
+export function pruneBodies(doc: SketchDoc): void {
+  for (const b of Object.values(doc.bodies)) {
+    b.members = b.members.filter((id) => id in doc.geoms || id in doc.points);
+    if (!b.members.length) delete doc.bodies[b.id];
+  }
+  for (const id of Object.keys(doc.motion.poses)) if (!doc.bodies[id]) delete doc.motion.poses[id];
+  for (const d of Object.values(doc.motion.drivers)) {
+    if (!doc.constraints[d.joint] || !doc.bodies[d.a] || !doc.bodies[d.b]) delete doc.motion.drivers[d.id];
   }
 }
 

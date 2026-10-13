@@ -2,7 +2,7 @@
 
 A browser app for designing 2D mechanisms. Sketch with CAD-style constraints, group lines into rigid bodies, join them with joints, then drive the mechanism with sliders, by dragging, or with a keyframe timeline.
 
-This is step 1 of 4: the constraint sketcher. Bodies and Motion mode come in step 2.
+This is step 2 of 4: the constraint sketcher, bodies, joints and Motion mode. Tracks, gears and cams come in step 3; the timeline and path tracing in step 4.
 
 ## Run it
 
@@ -37,6 +37,10 @@ Pushing to `main` deploys to GitHub Pages (Settings → Pages → Source: GitHub
 | Ctrl+Z / Ctrl+Y | Undo / redo |
 | Ctrl+S / Ctrl+O | Save / open a `.kinemo.json` file |
 | Shift+N | New sketch |
+| B | Make a body from the selected lines, arcs, circles and points |
+| G | Toggle ground on the selected body |
+| Shift+B | Solid or see-through bars |
+| Tab | Switch between Sketch and Motion |
 | Esc | Cancel, then back to Select |
 
 Constraint keys work both ways: select items first and press the key, or press the key first and then click the items (it stays active for the next ones until Esc). The right panel lists the constraints that fit the current selection, and every toolbar button shows its key. Middle- or right-drag pans, the wheel zooms, and two fingers pan and pinch on touch screens.
@@ -45,12 +49,28 @@ Line colour shows status: blue is still free to move, black is fully defined.
 
 Over-constraining is allowed. The newest constraint that causes it is shown in dark red and isn't applied, so the rest of the sketch keeps working; every other constraint whose removal would also fix it is shown in light red. A banner explains it and offers to remove the newest one. Drag steps that would collapse geometry or leave the sketch over-constrained are skipped, so dragging never causes it.
 
+## Bodies and Motion mode
+
+Select geometry and press B to make it one rigid body; press G to make a body the ground. Joints come from the sketch: wherever geometry of two bodies is coincident (or concentric) they are pinned, and a point of one body on a line or arc of another slides along it. Lines that carry a slider are drawn as slots.
+
+| Key (Motion) | Action |
+| --- | --- |
+| S | Move: drag any bar, the mechanism follows |
+| D | Add slider: click the body it measures from, the body that moves, then the joint (or click a joint) |
+| Shift+F | Flip to the other way the mechanism assembles |
+| R | Reset every body to its sketched position |
+| G | Toggle ground |
+| Del | Delete the selected joint's slider |
+
+Sliders sit in the right panel, and you can drag them and the bars together. When a slider or a drag asks for more than the mechanism can do, it stops at the last pose that works. The feature list shows the mechanism's degrees of freedom.
+
 ## Adding a feature
 
 Every kind of feature lives in a registry, so a new one is a new file plus one registration line.
 
 - **Constraint:** implement `ConstraintType` (`src/constraints/types.ts`) and add it to the list in `src/constraints/index.ts`. It gets a toolbar button, shortcut, right-panel chip, undo and saving automatically.
-- **Tool:** implement `Tool` (`src/tools/types.ts`) and add it in `src/tools/index.ts`.
+- **Tool:** implement `Tool` (`src/tools/types.ts`) and add it in `src/tools/index.ts`. Set `modes` to make it a Motion-mode tool.
+- **Joint:** implement `JointKind` (`src/motion/joints.ts`): which sketch constraint makes it, its equations, its slider and its travel limits. The motion solver (`src/motion/kinematics.ts`) handles the rest.
 - **Action:** add an entry in `src/ui/actions.ts`.
 - **Text:** all interface strings are in `src/i18n/en.ts`.
 - **File format:** bump `DOC_VERSION` in `src/core/model.ts` and add a migration in `src/io/file.ts`.

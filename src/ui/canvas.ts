@@ -2,6 +2,7 @@ import type { Editor } from "../app/editor";
 import { arcRadius, type Vec } from "../core/model";
 import { add, norm, projectOnLine, scale, sub } from "../core/geom";
 import { hitTest } from "../render/hit";
+import { motionHit } from "../render/bars";
 import { render } from "../render/renderer";
 import { tools } from "../tools";
 import type { Snap, ToolEvent } from "../tools/types";
@@ -34,7 +35,7 @@ export function mountCanvas(canvas: HTMLCanvasElement, ed: Editor): void {
   function snapAt(s: Vec): Snap {
     const world = ed.view.toWorld(s);
     const tool = tools.find(ed.tool);
-    if (!tool?.snaps) return { kind: "none", at: world };
+    if (!tool?.snaps || ed.mode === "motion") return { kind: "none", at: world };
     const h = hitTest(ed.doc, ed.view, s, { icons: false, geometryOnly: true });
     if (h?.kind === "point") {
       const p = ed.doc.points[h.id];
@@ -62,7 +63,7 @@ export function mountCanvas(canvas: HTMLCanvasElement, ed: Editor): void {
       world: ed.view.toWorld(screen),
       screen,
       snap: snapAt(screen),
-      hit: hitTest(ed.doc, ed.view, screen, { icons: ed.doc.settings.showConstraintIcons }),
+      hit: ed.mode === "motion" ? motionHit(ed, screen) : hitTest(ed.doc, ed.view, screen, { icons: ed.doc.settings.showConstraintIcons }),
       shift: e.shiftKey,
       ctrl: e.ctrlKey || e.metaKey,
       double,

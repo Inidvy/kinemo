@@ -7,7 +7,9 @@ export type Hit =
   | { kind: "point"; id: Id }
   | { kind: "geom"; id: Id; part?: "rim" }
   | { kind: "constraint"; id: Id }
-  | { kind: "dimension"; id: Id };
+  | { kind: "dimension"; id: Id }
+  | { kind: "body"; id: Id }
+  | { kind: "joint"; id: Id };
 
 export interface HitOptions {
   icons: boolean;

@@ -1,4 +1,4 @@
-import type { Editor } from "../app/editor";
+import type { Editor, Mode } from "../app/editor";
 import type { Id, Vec } from "../core/model";
 import type { Hit } from "../render/hit";
 
@@ -40,6 +40,8 @@ export interface Tool {
   hintText?(ed: Editor): string;
   /** Not shown on the toolbar (entered some other way). */
   hidden?: boolean;
+  /** Modes the tool is available in (default: Sketch only). */
+  modes?: Mode[];
   /** Snap to existing points and curves while this tool is active. */
   snaps?: boolean;
   activate?(ed: Editor): void;
@@ -52,4 +54,8 @@ export interface Tool {
   overlay?(o: Overlay): void;
   /** A key pressed while this tool is active. Return true if handled. */
   key?(ed: Editor, key: string): boolean;
+}
+
+export function toolInMode(tool: Tool, mode: Mode): boolean {
+  return (tool.modes ?? ["sketch"]).includes(mode);
 }

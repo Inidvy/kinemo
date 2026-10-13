@@ -6,6 +6,7 @@ import { colors } from "./style";
 import { ICON, layoutDims, layoutIcons, linearOffset, type DimLayout } from "./layout";
 import type { View } from "./view";
 import { drawConstraintIcon } from "../ui/icons";
+import { drawBodies, drawJoints, drawLooseGeometry } from "./bars";
 
 /** Draws the sketch. Stateless: everything comes from the editor. */
 export function render(ctx: CanvasRenderingContext2D, ed: Editor, w: number, h: number): void {
@@ -16,6 +17,18 @@ export function render(ctx: CanvasRenderingContext2D, ed: Editor, w: number, h: 
   drawGrid(ctx, v, w, h);
 
   const doc = ed.doc;
+  if (ed.mode === "motion") {
+    // Motion mode: no constraints or dimensions, just bars, slots and joints.
+    drawLooseGeometry(ctx, ed);
+    drawBodies(ctx, ed, { posed: true, alpha: 1, selected: new Set(), hover: ed.hover });
+    drawJoints(ctx, ed);
+    tools.find(ed.tool)?.overlay?.({ ctx, ed });
+    ctx.restore();
+    return;
+  }
+  if (Object.keys(doc.bodies).length) {
+    drawBodies(ctx, ed, { posed: false, alpha: doc.settings.solidBars ? 0.9 : 0.3, selected: new Set(), hover: ed.hover });
+  }
   const hoverRefs = new Set<Id>();
   const selRefs = new Set<Id>();
   // Hovering or selecting a constraint highlights what it ties together.
@@ -25,6 +38,8 @@ export function render(ctx: CanvasRenderingContext2D, ed: Editor, w: number, h: 
   ] as [Id | null, Set<Id>][]) {
     const c = id ? doc.constraints[id] : undefined;
     if (c) c.refs.forEach((r) => set.add(r));
+    const b = id ? doc.bodies[id] : undefined;
+    if (b) b.members.forEach((r) => set.add(r));
   }
   // Over-constraint: the newest culprit and what it touches in dark red, the
   // other constraints that would also fix it in light red.

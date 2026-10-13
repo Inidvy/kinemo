@@ -1,6 +1,6 @@
 import type { Editor } from "../app/editor";
-import { tools } from "../tools";
-import { actions } from "./actions";
+import { tools, toolInMode } from "../tools";
+import { actions, actionInMode } from "./actions";
 import { setTool } from "./toolbar";
 
 /** Global keyboard shortcuts, read from the tool and action registries. */
@@ -14,7 +14,8 @@ export function mountKeys(ed: Editor): void {
     if (key === "escape") {
       const tool = tools.find(ed.tool);
       if (!tool?.cancel?.(ed)) {
-        if (ed.tool !== "select") setTool(ed, "select");
+        const home = ed.mode === "motion" ? "move" : "select";
+        if (ed.tool !== home) setTool(ed, home);
         else ed.select([]);
       }
       ed.emit();
@@ -27,7 +28,7 @@ export function mountKeys(ed: Editor): void {
       return;
     }
     if (!ctrl) {
-      const tool = tools.all().find((t) => t.shortcut === key && !!t.shift === e.shiftKey);
+      const tool = tools.all().find((t) => t.shortcut === key && !!t.shift === e.shiftKey && toolInMode(t, ed.mode));
       if (tool) {
         e.preventDefault();
         setTool(ed, tool.id);
@@ -36,7 +37,7 @@ export function mountKeys(ed: Editor): void {
     }
     const action = actions
       .all()
-      .find((a) => a.shortcut === key && !!a.ctrl === ctrl && (a.shift === undefined || a.shift === e.shiftKey));
+      .find((a) => a.shortcut === key && !!a.ctrl === ctrl && (a.shift === undefined || a.shift === e.shiftKey) && actionInMode(a, ed.mode));
     if (action) {
       e.preventDefault();
       action.run(ed);

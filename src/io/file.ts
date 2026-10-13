@@ -7,7 +7,10 @@ const AUTOSAVE_KEY = "kinemo.autosave";
  * Upgrade older files step by step. Each entry upgrades from version `from`
  * to `from + 1`. Add one when a feature changes the format.
  */
-const migrations: Record<number, (d: Record<string, unknown>) => void> = {};
+const migrations: Record<number, (d: Record<string, unknown>) => void> = {
+  // Version 2 added bodies and motion state; empty ones are filled in below.
+  1: () => {},
+};
 
 export function parseDoc(text: string): SketchDoc {
   let raw: Record<string, unknown>;

@@ -1,5 +1,6 @@
 import { History } from "../core/history";
 import { cloneDoc, emptyDoc, type Id, type SketchDoc } from "../core/model";
+import { Mechanism, type MotionDrag } from "../motion/kinematics";
 import { degenerate, Solver, type DragTarget } from "../solver/solver";
 import { View } from "../render/view";
 import { constraintTypes } from "../constraints";
@@ -17,9 +18,11 @@ export interface Analysis {
   fixes: Set<Id>;
   /** The sketch can't be solved with all its constraints. */
   over: boolean;
+  /** Degrees of freedom of the mechanism (Motion mode). */
+  mechDof: number;
 }
 
-const emptyAnalysis = (): Analysis => ({ dof: 0, free: new Set(), freeRadii: new Set(), conflicting: new Set(), culprits: new Set(), fixes: new Set(), over: false });
+const emptyAnalysis = (): Analysis => ({ dof: 0, free: new Set(), freeRadii: new Set(), conflicting: new Set(), culprits: new Set(), fixes: new Set(), over: false, mechDof: 0 });
 
 export type Mode = "sketch" | "motion";
 
@@ -51,6 +54,61 @@ export class Editor {
 
   get doc(): SketchDoc {
     return this.history.current;
+  }
+
+  private mechCache: { doc: SketchDoc; mech: Mechanism } | null = null;
+
+  /** The mechanism for the current document (bodies, joints, poses). */
+  get mech(): Mechanism {
+    if (this.mechCache?.doc !== this.doc) this.mechCache = { doc: this.doc, mech: new Mechanism(this.doc) };
+    return this.mechCache.mech;
+  }
+
+  /** Switch between Sketch and Motion mode. */
+  setMode(mode: Mode): void {
+    if (mode === this.mode) return;
+    this.mode = mode;
+    this.selection.clear();
+    this.hover = null;
+    if (mode === "motion") {
+      // Put the mechanism together: the sketch may have changed since last time.
+      const q = this.mech.assemble();
+      const poses = this.mech.poses(q);
+      this.live((doc) => (doc.motion.poses = poses));
+    }
+    this.reanalyse();
+    this.emit();
+  }
+
+  /** Pull a body point towards the cursor (Motion mode). Stays put if the joints don't allow it. */
+  motionDrag(drag: MotionDrag): void {
+    const m = this.mech;
+    const q = m.solve({ drag, maxTurn: 0.8 });
+    if (q) this.live((doc) => (doc.motion.poses = m.poses(q)));
+  }
+
+  /** Move a slider; the mechanism follows as far as it can. */
+  driveSlider(driverId: Id, value: number): void {
+    const d = this.doc.motion.drivers[driverId];
+    if (!d) return;
+    const m = this.mech;
+    const others = Object.values(this.doc.motion.drivers).map((x) => x.joint);
+    const r = m.driveTo(d.joint, value, others);
+    this.live((doc) => (doc.motion.poses = m.poses(r.q)));
+  }
+
+  /** Switch to the other way the mechanism can be assembled. */
+  flip(): boolean {
+    const m = this.mech;
+    const q = m.flip(Object.values(this.doc.motion.drivers));
+    if (!q) return false;
+    this.change((doc) => (doc.motion.poses = m.poses(q)));
+    return true;
+  }
+
+  /** Put every body back where it was sketched. */
+  resetPose(): void {
+    this.change((doc) => (doc.motion.poses = {}));
   }
 
   subscribe(fn: () => void): () => void {
@@ -220,6 +278,7 @@ export class Editor {
         solvable = { ...doc, constraints: Object.fromEntries(Object.entries(doc.constraints).filter(([id]) => !skip.has(id))) };
       }
       this.analysis = {
+        mechDof: this.mode === "motion" ? this.mech.dof() : 0,
         dof: this.solver.solve(solvable).dof,
         free: this.solver.freePoints(solvable),
         freeRadii: this.solver.freeRadii(solvable),
