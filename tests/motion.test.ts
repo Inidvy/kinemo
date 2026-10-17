@@ -133,6 +133,9 @@ describe("motion", () => {
     addConstraint(doc, { type: "vertical", refs: [block.id] });
     body(doc, "rail", [rail.id], true);
     body(doc, "block", [block.id]);
+    // A point on a plain line of another body is no slider until the line is a track (K).
+    expect(new Mechanism(doc).joints).toEqual([]);
+    doc.geoms[rail.id].track = true;
     const m = new Mechanism(doc);
     expect(m.joints[0].kind).toBe("slot");
     // Block has 2 DOF (slide and turn).
@@ -316,6 +319,7 @@ describe("cams", () => {
     const roller = addGeom<Circle>(doc, { kind: "circle", c: rollC, r: 5 });
     const stem = bar(doc, 0, 30, 0, 50);
     const pin = addConstraint(doc, { type: "coincident", refs: [ground.p1, arm.p1] });
+    doc.geoms[ground.id].track = true;
     addConstraint(doc, { type: "onCurve", refs: [stem.p2, ground.id] });
     addConstraint(doc, { type: "onCurve", refs: [stem.p1, ground.id] });
     const contact = addConstraint(doc, { type: "tangent", refs: [camCircle, roller] });

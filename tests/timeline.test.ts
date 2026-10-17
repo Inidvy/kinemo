@@ -1,11 +1,45 @@
 import { describe, it, expect } from "vitest";
 import { addConstraint, addGeom, addPoint, emptyDoc, type Line, type SketchDoc, type Timeline } from "../src/core/model";
-import { clipTime, deleteKeys, setKey, shiftKeys, valueAt } from "../src/motion/timeline";
+import { clipTime, deleteKeys, loopedKeys, setFullTurn, setKey, setTurnWay, shiftKeys, turnWay, valueAt, valuesAt } from "../src/motion/timeline";
 import { sweepPaths } from "../src/motion/paths";
 import { Mechanism } from "../src/motion/kinematics";
 import { addDriver } from "../src/motion/drivers";
 
 describe("timeline", () => {
+  it("picks which way a turning slider goes between two keys", () => {
+    const keys = [{ t: 0, v: 10 }, { t: 1, v: 100 }, { t: 2, v: 50 }];
+    expect(turnWay(keys, 0)).toBe("ccw");
+    setTurnWay(keys, 0, "cw", 360);
+    // 10° to 100° the other way round is down to -260°; the next key keeps its angle (50° - 360°).
+    expect(keys.map((k) => k.v)).toEqual([10, -260, -310]);
+    expect(turnWay(keys, 0)).toBe("cw");
+    const same = [{ t: 0, v: 0 }, { t: 1, v: 0 }];
+    expect(turnWay(same, 0)).toBeNull();
+    setTurnWay(same, 0, "ccw", 360);
+    expect(same[1].v).toBe(360);
+  });
+
+  it("closes a looping clip back to its first key", () => {
+    const keys = [{ t: 0, v: 0 }, { t: 2, v: 10 }];
+    const tl: Timeline = { length: 4, mode: "loop", keys: { d: keys } };
+    expect(valuesAt(tl, 4)[0].value).toBeCloseTo(0);
+    expect(valuesAt(tl, 3)[0].value).toBeCloseTo(5);
+    // Not when it plays once, nor with a key already at the end.
+    expect(valuesAt({ ...tl, mode: "once" }, 3)[0].value).toBe(10);
+    expect(loopedKeys([...keys, { t: 4, v: 3 }], 4)).toHaveLength(3);
+    // A slider that goes round comes back to the nearest full turn of the first key.
+    expect(loopedKeys([{ t: 0, v: 0 }, { t: 2, v: 350 }], 4, 360).at(-1)!.v).toBe(360);
+  });
+
+  it("keys a whole turn over the clip at a steady speed", () => {
+    const tl: Timeline = { length: 2, mode: "loop", keys: { d: [{ t: 1, v: 5 }] } };
+    setFullTurn(tl, "d", 30, 360);
+    expect(tl.keys.d).toEqual([{ t: 0, v: 30, linear: true }, { t: 2, v: 390 }]);
+    expect(valueAt(tl.keys.d, 1)).toBeCloseTo(210);
+    setFullTurn(tl, "d", 30, 360, true);
+    expect(tl.keys.d[1].v).toBe(-330);
+  });
+
   it("deletes several keys across sliders, dropping emptied sliders", () => {
     const tl: Timeline = { length: 4, mode: "loop", keys: { a: [{ t: 0, v: 0 }, { t: 1, v: 1 }, { t: 2, v: 2 }], b: [{ t: 1, v: 5 }] } };
     deleteKeys(tl, [{ driver: "a", i: 0 }, { driver: "a", i: 2 }, { driver: "b", i: 0 }]);

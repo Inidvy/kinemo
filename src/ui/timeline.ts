@@ -1,7 +1,8 @@
 import type { Editor } from "../app/editor";
 import type { Id, Keyframe, Timeline } from "../core/model";
 import { jointKinds } from "../motion/joints";
-import { clipTime, DEFAULT_TIMELINE, deleteKeys, keysFromRecording, setKey, shiftKeys, timelineOf, valueAt, valuesAt, type KeyRef } from "../motion/timeline";
+import { clipTime, DEFAULT_TIMELINE, deleteKeys, keysFromRecording, setFullTurn, setKey, setTurnWay, shiftKeys, timelineOf, turnWay, valueAt, type KeyRef, type TurnWay } from "../motion/timeline";
+import { clipTargets } from "../motion/clip";
 import { t } from "../i18n";
 import { icons } from "./icons";
 import { driverName } from "./motionPanels";
@@ -138,9 +139,9 @@ export class Player {
   pose(time: number): void {
     const ed = this.ed;
     const doc = ed.doc;
-    const targets = valuesAt(timelineOf(doc), time).flatMap(({ driver, value }) => (doc.motion.drivers[driver] ? [{ joint: doc.motion.drivers[driver].joint, value }] : []));
-    if (!targets.length) return ed.emit();
     const m = ed.mech;
+    const targets = clipTargets(doc, m, time);
+    if (!targets.length) return ed.emit();
     const r = m.driveAll(targets);
     ed.live((d) => (d.motion.poses = m.poses(r.q)));
   }
@@ -299,6 +300,42 @@ export class Player {
   }
 
   /**
+   * Make the selected sliders (or the only one that turns) go one whole turn
+   * over the clip, at a steady speed, and loop the clip. Shift turns the other way.
+   */
+  fullTurn(reverse = false): void {
+    const ed = this.ed;
+    if (ed.mode !== "motion") return;
+    const m = ed.mech;
+    const turning = Object.values(ed.doc.motion.drivers).filter((d) => {
+      const j = m.joint(d.joint);
+      return j && jointKinds.get(j.kind).wraps?.(j);
+    });
+    const picked = turning.filter((d) => ed.selection.has(d.id) || ed.selection.has(d.joint));
+    const pick = picked.length ? picked : turning.length === 1 ? turning : [];
+    if (!pick.length) return ed.flash(t(turning.length ? "timeline.turnPick" : "timeline.turnNone"));
+    if (this.playing) this.stop();
+    const tl0 = timelineOf(ed.doc);
+    const now = this.values();
+    ed.change((doc) => {
+      const tl: Timeline = structuredClone(doc.motion.timeline ?? DEFAULT_TIMELINE);
+      for (const d of pick) {
+        const j = m.joint(d.joint)!;
+        const [lo, hi] = jointKinds.get(j.kind).range(doc, j);
+        // Start where the slider is keyed at the start of the clip, or where it is now.
+        setFullTurn(tl, d.id, valueAt(tl0.keys[d.id], 0) ?? now[d.id] ?? 0, hi - lo, reverse);
+      }
+      if (tl.mode === "once") tl.mode = "loop";
+      doc.motion.timeline = tl;
+    });
+    this.keySel = [];
+    this.time = 0;
+    this.pose(0);
+    this.snapshot();
+    ed.flash(t("timeline.turnDone", { n: pick.length }));
+  }
+
+  /**
    * Set keys at the playhead for the sliders that already have keys, the
    * sliders moved since the playhead last moved, and a selected slider. With
    * none of those, every slider gets a key.
@@ -444,8 +481,14 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
             return `${seg}<span class="tl-key${on ? " on" : ""}" data-key="${i}" data-driver="${d.id}" style="left:${pct(k.t)}" title="${k.t.toFixed(2)} s · ${fmt(ed, d.id, k.v)}"></span>`;
           })
           .join("");
+        // A looping clip goes back to the first key at the end: shown as a hollow key there.
+        const last = keys[keys.length - 1];
+        const ghost =
+          tl.mode === "loop" && last && last.t < tl.length - 1e-6
+            ? `<span class="tl-seg ${segKind(last)}" style="left:${pct(last.t)};width:calc(100% - ${pct(last.t)})"></span><span class="tl-key ghost" style="left:100%" title="${t("timeline.loopKey")}"></span>`
+            : "";
         const label = `<div class="tl-name${ed.selection.has(d.id) || ed.selection.has(d.joint) ? " sel" : ""}" data-pick="${d.joint}" title="${esc(driverName(ed, d))}">${esc(driverName(ed, d))}</div>`;
-        return `${label}<div class="tl-lane" data-driver="${d.id}">${diamonds}</div>`;
+        return `${label}<div class="tl-lane" data-driver="${d.id}">${diamonds}${ghost}</div>`;
       })
       .join("");
     const series = chartSeries(ed);
@@ -461,11 +504,26 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
     const picked = p.keySel.map((r) => tl.keys[r.driver][r.i]);
     const one = picked.length === 1 ? picked[0] : null;
     const segAll = picked.length && picked.every((x) => segKind(x) === segKind(picked[0])) ? segKind(picked[0]) : null;
+    // A key of a slider that goes round: which way it turns to the next key.
+    const turnPer = (driver: Id) => {
+      const j = ed.mech.joint(doc.motion.drivers[driver]?.joint);
+      const kind = j && jointKinds.get(j.kind);
+      if (!j || !kind?.wraps?.(j)) return null;
+      const [lo, hi] = kind.range(doc, j);
+      return hi - lo;
+    };
+    const oneRef = one ? p.keySel[0] : null;
+    const way = oneRef && turnPer(oneRef.driver) && tl.keys[oneRef.driver][oneRef.i + 1] ? turnWay(tl.keys[oneRef.driver], oneRef.i) : undefined;
+    const turnSelect =
+      way !== undefined
+        ? `<select data-tl="kturn" title="${t("timeline.turnWayTip")}">${way ? "" : `<option value="" selected>${t("timeline.turnHold")}</option>`}${(["ccw", "cw"] as const).map((x) => `<option value="${x}"${way === x ? " selected" : ""}>${t(`timeline.turnWay.${x}`)}</option>`).join("")}</select>`
+        : "";
     const editor = picked.length
       ? `<span class="tl-keyedit">
           <span class="tl-keyname">◆ ${one ? esc(driverName(ed, doc.motion.drivers[p.keySel[0].driver])) : t("timeline.nKeys", { n: picked.length })}</span>
           ${one ? `<label>${t("timeline.at")}<input type="number" step="0.05" min="0" data-tl="kt" value="${one.t}"> s</label>
           <label>${t("timeline.value")}<input type="number" step="any" data-tl="kv" value="${round(one.v)}"></label>` : ""}
+          ${turnSelect}
           <select data-tl="kseg" title="${t("timeline.segTip")}">${segAll ? "" : `<option value="" selected>${t("timeline.segMixed")}</option>`}${SEGS.map((x) => `<option value="${x}"${segAll === x ? " selected" : ""}>${t(`timeline.segShort.${x}`)}</option>`).join("")}</select>
           <button class="icon-btn" data-tl="kdel" title="${t("timeline.deleteKeys")} (Del)">${icons.delete}</button>
         </span>`
@@ -482,6 +540,7 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
         </span>
         <span class="tl-group">
           <button class="btn tl-keybtn" data-tl="key" ${busy ? "disabled" : ""} title="${t("timeline.keyTip")}">${icons.key}${t("timeline.key")}</button>
+          <button class="btn tl-turn" data-tl="turn" ${busy ? "disabled" : ""} title="${t("timeline.turnTip")}">${icons.reset}${t("timeline.turn")}</button>
           <button class="btn tl-rec${p.recording ? " on" : ""}${counting !== null ? " counting" : ""}" data-tl="rec" ${video || gifProgress !== null ? "disabled" : ""} title="${t("record.tip")}"><span class="tl-recdot"></span>${counting !== null ? t("record.cancel", { n: counting }) : t(p.recording ? "record.stop" : "record.start")}</button>
         </span>
         ${editor}
@@ -559,6 +618,7 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
       if (what === "stop") p.toStart();
       if (what === "delall") p.deleteAllKeys();
       if (what === "key") p.key();
+      if (what === "turn") p.fullTurn(e.shiftKey);
       if (what === "video") {
         if (video) p.stop();
         else video = recordVideo(ed, p, () => ((video = null), ed.emit()));
@@ -596,6 +656,14 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
     if (what === "kseg" && refs.length && input.value) editTimeline((tl) => refs.forEach((r) => setSeg(tl.keys[r.driver][r.i], input.value as Seg)));
     if (refs.length === 1) {
       const s = refs[0];
+      if (what === "kturn" && input.value) {
+        const d = ed.doc.motion.drivers[s.driver];
+        const j = d && ed.mech.joint(d.joint);
+        if (j) {
+          const [lo, hi] = jointKinds.get(j.kind).range(ed.doc, j);
+          editTimeline((tl) => setTurnWay(tl.keys[s.driver], s.i, input.value as TurnWay, hi - lo));
+        }
+      }
       if (what === "kv" && Number.isFinite(n)) editTimeline((tl) => (tl.keys[s.driver][s.i].v = n));
       if (what === "kt" && Number.isFinite(n)) {
         editTimeline((tl) => {
