@@ -2,6 +2,7 @@ import type { Editor } from "../app/editor";
 import { arcRadius, geomPoints, type Geometry, type Id, type Vec } from "../core/model";
 import { add, angleOf, norm, perp, scale, sub } from "../core/geom";
 import { tools } from "../tools";
+import { drawSnap } from "../tools/snap";
 import { colors } from "./style";
 import { ICON, isWatched, layoutDims, layoutIcons, linearOffset, type DimLayout } from "./layout";
 import type { View } from "./view";
@@ -101,6 +102,7 @@ export function render(ctx: CanvasRenderingContext2D, ed: Editor, w: number, h: 
   }
 
   tools.find(ed.tool)?.overlay?.({ ctx, ed });
+  drawSnap(ctx, v, ed.snap);
   ctx.restore();
 }
 

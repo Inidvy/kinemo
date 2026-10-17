@@ -1,5 +1,6 @@
-import { arcRadius, type Arc, type Circle, type Geometry, type Id, type Line, type SketchDoc, type Vec } from "../core/model";
+import { arcRadius, geomPoints, type Arc, type Circle, type Geometry, type Id, type Line, type SketchDoc, type Vec } from "../core/model";
 import { angleOf, mid } from "../core/geom";
+import type { ConstraintType } from "./types";
 
 /** Helpers for reading a selection by kind. */
 export function split(doc: SketchDoc, sel: Id[]) {
@@ -13,6 +14,22 @@ export function split(doc: SketchDoc, sel: Id[]) {
     arcs: geoms.filter((g): g is Arc => g.kind === "arc"),
     curves: geoms.filter((g): g is Circle | Arc => g.kind !== "line"),
   };
+}
+
+/**
+ * Build a constraint from a selection. A box selection or Ctrl+A picks up
+ * the end points of the lines it catches too, which no line constraint
+ * wants: if the selection doesn't fit as it is, try again without the
+ * points that belong to selected geometry.
+ */
+export function fitSelection(def: ConstraintType, doc: SketchDoc, sel: Id[]): ReturnType<ConstraintType["fromSelection"]> {
+  const out = def.fromSelection(doc, sel);
+  if (typeof out !== "string") return out;
+  const owned = new Set(split(doc, sel).geoms.flatMap((g) => geomPoints(g)));
+  const trimmed = sel.filter((id) => !owned.has(id));
+  if (trimmed.length === sel.length || !trimmed.length) return out;
+  const again = def.fromSelection(doc, trimmed);
+  return typeof again === "string" ? out : again;
 }
 
 export const P = (doc: SketchDoc, id: Id): Vec => doc.points[id];

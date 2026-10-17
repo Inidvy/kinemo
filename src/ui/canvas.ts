@@ -1,10 +1,10 @@
 import type { Editor } from "../app/editor";
-import { arcRadius, type Vec } from "../core/model";
-import { add, norm, projectOnLine, scale, sub } from "../core/geom";
+import type { Vec } from "../core/model";
 import { hitTest } from "../render/hit";
 import { motionHit } from "../render/bars";
 import { render } from "../render/renderer";
 import { tools } from "../tools";
+import { findSnap } from "../tools/snap";
 import type { Snap, ToolEvent } from "../tools/types";
 
 /** The canvas draws at least this many pixels per CSS pixel: raised while a video records, so it comes out sharp on any screen. */
@@ -47,24 +47,9 @@ export function mountCanvas(canvas: HTMLCanvasElement, ed: Editor): void {
   };
 
   function snapAt(s: Vec): Snap {
-    const world = ed.view.toWorld(s);
     const tool = tools.find(ed.tool);
-    if (!tool?.snaps || ed.mode === "motion") return { kind: "none", at: world };
-    const h = hitTest(ed.doc, ed.view, s, { icons: false, geometryOnly: true });
-    if (h?.kind === "point") {
-      const p = ed.doc.points[h.id];
-      return { kind: "point", id: h.id, at: { x: p.x, y: p.y } };
-    }
-    if (h?.kind === "geom") {
-      const g = ed.doc.geoms[h.id];
-      if (g.kind === "line") {
-        return { kind: "curve", id: g.id, at: projectOnLine(world, ed.doc.points[g.p1], ed.doc.points[g.p2]) };
-      }
-      const c = ed.doc.points[g.c];
-      const r = g.kind === "circle" ? g.r : arcRadius(ed.doc, g);
-      return { kind: "curve", id: g.id, at: add(c, scale(norm(sub(world, c)), r)) };
-    }
-    return { kind: "none", at: world };
+    if (!tool?.snaps || ed.mode === "motion") return { kind: "none", at: ed.view.toWorld(s) };
+    return findSnap(ed.doc, ed.view, s);
   }
 
   let lastClick = 0;
@@ -112,7 +97,11 @@ export function mountCanvas(canvas: HTMLCanvasElement, ed: Editor): void {
     ed.emit();
   });
 
-  canvas.addEventListener("pointerleave", () => (ed.cursor = null));
+  canvas.addEventListener("pointerleave", () => {
+    ed.cursor = null;
+    ed.snap = null;
+    redraw();
+  });
 
   canvas.addEventListener("pointermove", (e) => {
     const s = screenOf(e);
@@ -137,6 +126,7 @@ export function mountCanvas(canvas: HTMLCanvasElement, ed: Editor): void {
     }
     const ev = event(e);
     ed.cursor = ev.world;
+    ed.snap = ev.snap.kind === "none" ? null : ev.snap;
     const h = ev.hit;
     const hover = h?.id ?? null;
     if (hover !== ed.hover) ed.hover = hover;
