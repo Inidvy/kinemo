@@ -169,3 +169,26 @@ export function setFullTurn(tl: Timeline, driver: Id, from: number, per: number,
     { t: Math.round(tl.length * 1000) / 1000, v: from + (reverse ? -per : per) },
   ];
 }
+
+/** Which way a turning slider goes from a key to the next: counter-clockwise (up) or clockwise (down). */
+export type TurnWay = "ccw" | "cw";
+
+/** Which way a slider turns from key i to the next, or null when it holds still. */
+export function turnWay(keys: Keyframe[], i: number): TurnWay | null {
+  const d = keys[i + 1] ? keys[i + 1].v - keys[i].v : 0;
+  return Math.abs(d) < 1e-9 ? null : d > 0 ? "ccw" : "cw";
+}
+
+/**
+ * Make a turning slider go the given way from key i to the next, less than
+ * a full turn (`per`), or a whole turn if the two keys are at the same
+ * angle. The keys after it move by whole turns with it, so they keep their angles.
+ */
+export function setTurnWay(keys: Keyframe[], i: number, way: TurnWay, per: number): void {
+  if (!keys[i + 1]) return;
+  const d = keys[i + 1].v - keys[i].v;
+  const r = ((d % per) + per) % per;
+  const want = way === "ccw" ? (r < 1e-9 ? per : r) : r < 1e-9 ? -per : r - per;
+  const shift = want - d;
+  for (let j = i + 1; j < keys.length; j++) keys[j].v += shift;
+}

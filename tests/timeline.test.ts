@@ -1,11 +1,24 @@
 import { describe, it, expect } from "vitest";
 import { addConstraint, addGeom, addPoint, emptyDoc, type Line, type SketchDoc, type Timeline } from "../src/core/model";
-import { clipTime, deleteKeys, loopedKeys, setFullTurn, setKey, shiftKeys, valueAt, valuesAt } from "../src/motion/timeline";
+import { clipTime, deleteKeys, loopedKeys, setFullTurn, setKey, setTurnWay, shiftKeys, turnWay, valueAt, valuesAt } from "../src/motion/timeline";
 import { sweepPaths } from "../src/motion/paths";
 import { Mechanism } from "../src/motion/kinematics";
 import { addDriver } from "../src/motion/drivers";
 
 describe("timeline", () => {
+  it("picks which way a turning slider goes between two keys", () => {
+    const keys = [{ t: 0, v: 10 }, { t: 1, v: 100 }, { t: 2, v: 50 }];
+    expect(turnWay(keys, 0)).toBe("ccw");
+    setTurnWay(keys, 0, "cw", 360);
+    // 10° to 100° the other way round is down to -260°; the next key keeps its angle (50° - 360°).
+    expect(keys.map((k) => k.v)).toEqual([10, -260, -310]);
+    expect(turnWay(keys, 0)).toBe("cw");
+    const same = [{ t: 0, v: 0 }, { t: 1, v: 0 }];
+    expect(turnWay(same, 0)).toBeNull();
+    setTurnWay(same, 0, "ccw", 360);
+    expect(same[1].v).toBe(360);
+  });
+
   it("closes a looping clip back to its first key", () => {
     const keys = [{ t: 0, v: 0 }, { t: 2, v: 10 }];
     const tl: Timeline = { length: 4, mode: "loop", keys: { d: keys } };

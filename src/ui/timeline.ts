@@ -1,7 +1,7 @@
 import type { Editor } from "../app/editor";
 import type { Id, Keyframe, Timeline } from "../core/model";
 import { jointKinds } from "../motion/joints";
-import { clipTime, DEFAULT_TIMELINE, deleteKeys, keysFromRecording, setFullTurn, setKey, shiftKeys, timelineOf, valueAt, type KeyRef } from "../motion/timeline";
+import { clipTime, DEFAULT_TIMELINE, deleteKeys, keysFromRecording, setFullTurn, setKey, setTurnWay, shiftKeys, timelineOf, turnWay, valueAt, type KeyRef, type TurnWay } from "../motion/timeline";
 import { clipTargets } from "../motion/clip";
 import { t } from "../i18n";
 import { icons } from "./icons";
@@ -504,11 +504,26 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
     const picked = p.keySel.map((r) => tl.keys[r.driver][r.i]);
     const one = picked.length === 1 ? picked[0] : null;
     const segAll = picked.length && picked.every((x) => segKind(x) === segKind(picked[0])) ? segKind(picked[0]) : null;
+    // A key of a slider that goes round: which way it turns to the next key.
+    const turnPer = (driver: Id) => {
+      const j = ed.mech.joint(doc.motion.drivers[driver]?.joint);
+      const kind = j && jointKinds.get(j.kind);
+      if (!j || !kind?.wraps?.(j)) return null;
+      const [lo, hi] = kind.range(doc, j);
+      return hi - lo;
+    };
+    const oneRef = one ? p.keySel[0] : null;
+    const way = oneRef && turnPer(oneRef.driver) && tl.keys[oneRef.driver][oneRef.i + 1] ? turnWay(tl.keys[oneRef.driver], oneRef.i) : undefined;
+    const turnSelect =
+      way !== undefined
+        ? `<select data-tl="kturn" title="${t("timeline.turnWayTip")}">${way ? "" : `<option value="" selected>${t("timeline.turnHold")}</option>`}${(["ccw", "cw"] as const).map((x) => `<option value="${x}"${way === x ? " selected" : ""}>${t(`timeline.turnWay.${x}`)}</option>`).join("")}</select>`
+        : "";
     const editor = picked.length
       ? `<span class="tl-keyedit">
           <span class="tl-keyname">◆ ${one ? esc(driverName(ed, doc.motion.drivers[p.keySel[0].driver])) : t("timeline.nKeys", { n: picked.length })}</span>
           ${one ? `<label>${t("timeline.at")}<input type="number" step="0.05" min="0" data-tl="kt" value="${one.t}"> s</label>
           <label>${t("timeline.value")}<input type="number" step="any" data-tl="kv" value="${round(one.v)}"></label>` : ""}
+          ${turnSelect}
           <select data-tl="kseg" title="${t("timeline.segTip")}">${segAll ? "" : `<option value="" selected>${t("timeline.segMixed")}</option>`}${SEGS.map((x) => `<option value="${x}"${segAll === x ? " selected" : ""}>${t(`timeline.segShort.${x}`)}</option>`).join("")}</select>
           <button class="icon-btn" data-tl="kdel" title="${t("timeline.deleteKeys")} (Del)">${icons.delete}</button>
         </span>`
@@ -641,6 +656,14 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
     if (what === "kseg" && refs.length && input.value) editTimeline((tl) => refs.forEach((r) => setSeg(tl.keys[r.driver][r.i], input.value as Seg)));
     if (refs.length === 1) {
       const s = refs[0];
+      if (what === "kturn" && input.value) {
+        const d = ed.doc.motion.drivers[s.driver];
+        const j = d && ed.mech.joint(d.joint);
+        if (j) {
+          const [lo, hi] = jointKinds.get(j.kind).range(ed.doc, j);
+          editTimeline((tl) => setTurnWay(tl.keys[s.driver], s.i, input.value as TurnWay, hi - lo));
+        }
+      }
       if (what === "kv" && Number.isFinite(n)) editTimeline((tl) => (tl.keys[s.driver][s.i].v = n));
       if (what === "kt" && Number.isFinite(n)) {
         editTimeline((tl) => {
