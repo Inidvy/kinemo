@@ -399,7 +399,11 @@ jointKinds.register({
   },
 });
 
-/** Slot: a point of one body slides along a line of another. */
+/**
+ * Slot: a point of one body slides along a single track line (K) of
+ * another (a chain of track pieces is a track joint). A point on a plain
+ * line of another body is just a sketch relation, not a slider.
+ */
 jointKinds.register({
   id: "slot",
   label: "joint.slot",
@@ -408,7 +412,7 @@ jointKinds.register({
     if (c.type !== "onCurve") return null;
     const [p, gid] = c.refs;
     const g = doc.geoms[gid];
-    if (g?.kind !== "line") return null;
+    if (g?.kind !== "line" || !g.track) return null;
     const a = owner.get(gid), b = owner.get(p);
     if (!a || !b || a === b) return null;
     return { id: c.id, kind: "slot", a, b, refs: [p, g.p1, g.p2, gid] };

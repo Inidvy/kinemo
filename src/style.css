@@ -1157,3 +1157,10 @@ details summary {
 .tl-clip .tl-delall:not(:disabled):hover {
   color: var(--bad);
 }
+
+.tl-key.ghost {
+  background: #fff;
+  border: 1.5px solid var(--accent);
+  cursor: default;
+  pointer-events: none;
+}
