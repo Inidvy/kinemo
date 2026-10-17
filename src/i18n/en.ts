@@ -24,6 +24,7 @@ export const en: Record<string, string> = {
   "action.delete": "Delete",
   "action.undo": "Undo",
   "action.copy": "Copy",
+  "action.selectAll": "Select all",
   "action.cut": "Cut",
   "action.paste": "Paste",
   "action.duplicate": "Duplicate",

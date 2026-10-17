@@ -34,6 +34,7 @@ Pushing to `main` deploys to GitHub Pages (Settings → Pages → Source: GitHub
 | I | Show or hide constraint icons |
 | F | Zoom to fit |
 | Del | Delete |
+| Ctrl+A | Select all (Sketch: every line, arc, circle and loose point; Motion: every body) |
 | Ctrl+Z / Ctrl+Y | Undo / redo |
 | Ctrl+S / Ctrl+O | Save / open a `.kinemo.json` file |
 | Shift+N | New sketch |
@@ -43,7 +44,9 @@ Pushing to `main` deploys to GitHub Pages (Settings → Pages → Source: GitHub
 | Tab | Switch between Sketch and Motion |
 | Esc | Cancel and go back to Select |
 
-Constraint keys work both ways: select items first and press the key, or press the key first and then click the items (it stays active for the next ones until Esc). The right panel lists the constraints that fit the current selection, and every toolbar button shows its key. Middle- or right-drag pans, the wheel zooms, and two fingers pan and pinch on touch screens.
+Constraint keys work both ways: select items first and press the key, or press the key first and then click the items (it stays active for the next ones until Esc). A box selection or Ctrl+A also catches the end points of lines; constraints that only want the lines ignore them. The right panel lists the constraints that fit the current selection, and every toolbar button shows its key. Middle- or right-drag pans, the wheel zooms, and two fingers pan and pinch on touch screens.
+
+Snapping: while drawing, the pointer snaps to points (coincident), the middle of a line (midpoint, shown with a diamond) and lines, arcs and circles (point on curve), and the canvas names the constraint it will add. Dragging a single point with Select snaps the same way, and dropping it adds that constraint in the same undo step; hold Ctrl while dragging to move it without snapping.
 
 Line colour shows status: blue is still free to move, black is fully defined.
 

@@ -134,6 +134,19 @@ const builtins: Action[] = [
   { id: "cut", label: "action.cut", icon: icons.delete, shortcut: "x", ctrl: true, modes: SKETCH, run: (ed) => copy(ed) && actions.get("delete").run(ed) },
   { id: "paste", label: "action.paste", icon: icons.new, shortcut: "v", ctrl: true, modes: SKETCH, run: paste },
   { id: "duplicate", label: "action.duplicate", icon: icons.new, shortcut: "d", ctrl: true, modes: SKETCH, run: (ed) => copy(ed) && paste(ed) },
+  {
+    id: "selectAll",
+    label: "action.selectAll",
+    icon: icons.select,
+    shortcut: "a",
+    ctrl: true,
+    run(ed) {
+      // In Motion mode the bodies; in the sketch every line, arc and circle, plus points that aren't part of one.
+      if (ed.mode === "motion") return ed.select(Object.keys(ed.doc.bodies));
+      const used = new Set(Object.values(ed.doc.geoms).flatMap((g) => geomPoints(g)));
+      ed.select([...Object.keys(ed.doc.geoms), ...Object.keys(ed.doc.points).filter((id) => !used.has(id))]);
+    },
+  },
   { id: "redo2", label: "action.redo", icon: icons.redo, shortcut: "z", ctrl: true, shift: true, run: (ed) => ed.redo() },
   {
     id: "icons",

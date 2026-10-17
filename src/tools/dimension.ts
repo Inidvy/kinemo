@@ -1,6 +1,7 @@
 import { add, sub } from "../core/geom";
 import type { Constraint, Id, SketchDoc, Vec } from "../core/model";
 import { constraintTypes } from "../constraints";
+import { fitSelection } from "../constraints/select";
 import type { ConstraintType } from "../constraints/types";
 import { defaultLabel, dimAnchor, formatValue } from "../render/layout";
 import { drawDimension } from "../render/renderer";
@@ -21,7 +22,7 @@ function dimensionFor(doc: SketchDoc, sel: Id[]): { def: ConstraintType; c: Omit
   if (!sel.length) return null;
   for (const type of ORDER) {
     const def = constraintTypes.get(type);
-    const out = def.fromSelection(doc, sel);
+    const out = fitSelection(def, doc, sel);
     if (typeof out !== "string" && def.shape) return { def, c: out[0] };
   }
   return null;

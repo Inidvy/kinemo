@@ -2,6 +2,7 @@ import type { Editor } from "../app/editor";
 import { arcRadius, type Geometry, type Id } from "../core/model";
 import { dist } from "../core/geom";
 import { constraintTypes } from "../constraints";
+import { fitSelection } from "../constraints/select";
 import { dimText, isWatched, measured } from "../render/layout";
 import { t } from "../i18n";
 import { actions } from "./actions";
@@ -214,7 +215,7 @@ export function mountProperties(el: HTMLElement, ed: Editor, sliders: SliderMoti
     if (geomSel.length) {
       const fits = constraintTypes
         .all()
-        .filter((c) => !c.dimension && !c.hidden && typeof c.fromSelection(doc, geomSel) !== "string");
+        .filter((c) => !c.dimension && !c.hidden && typeof fitSelection(c, doc, geomSel) !== "string");
       if (fits.length) {
         html += `<div class="panel-title">${t("panel.addConstraint")}</div><div class="chips">`;
         html += fits

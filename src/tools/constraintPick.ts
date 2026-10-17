@@ -1,4 +1,5 @@
 import { constraintTypes } from "../constraints";
+import { fitSelection } from "../constraints/select";
 import { emptyDoc } from "../core/model";
 import { t } from "../i18n";
 import type { Editor } from "../app/editor";
@@ -51,7 +52,7 @@ export const constraintPickTool: Tool = {
     if (!h || (h.kind !== "point" && h.kind !== "geom")) return;
     ed.select([h.id], true);
     const sel = [...ed.selection];
-    if (typeof constraintTypes.get(pending).fromSelection(ed.doc, sel) === "string") return;
+    if (typeof fitSelection(constraintTypes.get(pending), ed.doc, sel) === "string") return;
     ed.applyConstraint(pending);
     ed.select([]);
   },

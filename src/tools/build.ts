@@ -1,14 +1,15 @@
 import { addConstraint, addPoint, type Id, type SketchDoc, type Vec } from "../core/model";
+import { snapConstraint } from "./snap";
 import type { Snap } from "./types";
 
 /**
  * Create a point where the user clicked and tie it to whatever it snapped
- * to: coincident with an existing point, or on a curve.
+ * to: coincident with an existing point, the midpoint of a line, or on a curve.
  */
 export function placePoint(doc: SketchDoc, snap: Snap): Id {
   const p = addPoint(doc, snap.at.x, snap.at.y);
-  if (snap.kind === "point") addConstraint(doc, { type: "coincident", refs: [snap.id, p] });
-  else if (snap.kind === "curve") addConstraint(doc, { type: "onCurve", refs: [p, snap.id] });
+  const c = snapConstraint(doc, p, snap);
+  if (c) addConstraint(doc, c);
   return p;
 }
 

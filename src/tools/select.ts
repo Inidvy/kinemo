@@ -1,4 +1,4 @@
-import { geomPoints, type Id, type SketchDoc, type Vec } from "../core/model";
+import { addConstraint, geomPoints, type Id, type SketchDoc, type Vec } from "../core/model";
 import { dist, sub } from "../core/geom";
 import { boxSelect } from "../render/hit";
 import { colors } from "../render/style";
@@ -6,10 +6,12 @@ import { icons } from "../ui/icons";
 import { dimAnchor } from "../render/layout";
 import { constraintTypes } from "../constraints";
 import type { DragTarget } from "../solver/solver";
-import type { Tool, ToolEvent } from "./types";
+import { findSnap, snapConstraint, snapExclusions } from "./snap";
+import type { Snap, Tool, ToolEvent } from "./types";
 
 type DragState =
-  | { kind: "points"; start: Vec; from: Map<Id, Vec> }
+  /** `single`: one point dragged on its own, which can be dropped onto a point, a line's middle or a curve. */
+  | { kind: "points"; start: Vec; from: Map<Id, Vec>; single: { id: Id; exclude: Set<Id>; snap: Snap | null } | null }
   | { kind: "radius"; circle: Id }
   | { kind: "label"; cid: Id }
   | { kind: "box"; start: Vec; now: Vec; additive: boolean };
@@ -60,7 +62,8 @@ export const selectTool: Tool = {
       for (const id of ed.selection) {
         for (const p of pointsOf(ed.doc, id)) from.set(p, { ...ed.doc.points[p] });
       }
-      drag = { kind: "points", start: e.world, from };
+      const single = h.kind === "point" && ed.selection.size === 1 && ed.selection.has(h.id) && !e.ctrl;
+      drag = { kind: "points", start: e.world, from, single: single ? { id: h.id, exclude: snapExclusions(ed.doc, h.id), snap: null } : null };
     } else {
       drag = null;
     }
@@ -77,6 +80,14 @@ export const selectTool: Tool = {
       const d = sub(e.world, drag.start);
       const targets: DragTarget[] = [];
       for (const [id, p] of drag.from) targets.push({ point: id, to: { x: p.x + d.x, y: p.y + d.y } });
+      const one = drag.single;
+      if (one) {
+        // Hold Ctrl to drag past points and lines without snapping.
+        const snap = e.ctrl ? null : findSnap(ed.doc, ed.view, e.screen, one.exclude);
+        one.snap = snap?.kind === "none" ? null : snap;
+        if (one.snap) targets[0].to = one.snap.at;
+        ed.snap = one.snap;
+      }
       ed.drag(targets);
     } else if (drag.kind === "radius") {
       const g = ed.doc.geoms[drag.circle];
@@ -103,6 +114,13 @@ export const selectTool: Tool = {
     if (drag?.kind === "box") {
       if (moved) ed.select(boxSelect(ed.doc, ed.view, drag.start, drag.now), drag.additive);
       else if (!drag.additive) ed.select([]);
+    } else if (drag?.kind === "points" && drag.single?.snap && moved) {
+      // Dropped on something: join it there, if the point could get there.
+      const { id, snap } = drag.single;
+      const p = ed.doc.points[id];
+      const c = p && dist(p, snap.at) < ed.view.px(4) ? snapConstraint(ed.doc, id, snap) : null;
+      ed.snap = null;
+      ed.endDrag(c ? (doc) => addConstraint(doc, c) : undefined);
     } else if (drag) {
       ed.endDrag();
     }
