@@ -7,7 +7,8 @@ import { icons } from "../ui/icons";
 import { dimAnchor } from "../render/layout";
 import { constraintTypes } from "../constraints";
 import type { DragTarget } from "../solver/solver";
-import { findSnap, snapConstraint, snapExclusions } from "./snap";
+import { t } from "../i18n";
+import { findSnap, snapConstraint, snapExclusions, snapIsSafe } from "./snap";
 import type { Snap, Tool, ToolEvent } from "./types";
 
 type DragState =
@@ -122,7 +123,13 @@ export const selectTool: Tool = {
       // Dropped on something: join it there, if the point could get there.
       const { id, snap } = drag.single;
       const p = ed.doc.points[id];
-      const c = p && dist(p, snap.at) < ed.view.px(4) ? snapConstraint(ed.doc, id, snap) : null;
+      let c = p && dist(p, snap.at) < ed.view.px(4) ? snapConstraint(ed.doc, id, snap) : null;
+      // Only add it if it doesn't clash with or repeat what already holds the point there
+      // (unless the sketch is red already, when nothing new can be checked).
+      if (c && !ed.analysis.over && !snapIsSafe(ed.solver, ed.doc, c)) {
+        c = null;
+        ed.flash(t("hint.snapRedundant"));
+      }
       ed.snap = null;
       ed.endDrag(c ? (doc) => addConstraintSmart(doc, c) : undefined);
     } else if (drag) {
