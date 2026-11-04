@@ -6,7 +6,8 @@ import { applyPose, nextBodyName, ownerMap, poseOf } from "../motion/bodies";
 import { t } from "../i18n";
 import { constraintTypes } from "../constraints";
 import { fitSelection } from "../constraints/select";
-import { downloadDoc, pickFile } from "../io/file";
+import { downloadDoc, hasUnsavedWork, markSaved, pickFile } from "../io/file";
+import { askSave } from "./askSave";
 import { icons, constraintIcon } from "./icons";
 import { pendingConstraint, startConstraintPick } from "../tools/constraintPick";
 import { setTool, switchMode } from "./toolbar";
@@ -30,6 +31,20 @@ export interface Action {
 }
 
 export const actions = new Registry<Action>("actions");
+
+/**
+ * Before the open sketch is replaced: if it has unsaved work, ask whether to
+ * save it first. Resolves true to go on, false when cancelled.
+ */
+async function saveFirst(ed: Editor): Promise<boolean> {
+  if (!hasUnsavedWork(ed.doc)) return true;
+  const choice = await askSave();
+  if (choice === "save") {
+    downloadDoc(ed.doc);
+    markSaved(ed.doc);
+  }
+  return choice !== "cancel";
+}
 
 function toggleFlag(ed: Editor, flag: "construction" | "track") {
   const ids = [...ed.selection].filter((id) => id in ed.doc.geoms);
@@ -210,7 +225,12 @@ const builtins: Action[] = [
     shortcut: "n",
     shift: true,
     group: "file",
-    run: (ed) => ed.change((doc) => Object.assign(doc, emptyDoc(), { settings: doc.settings })),
+    run: (ed) =>
+      void saveFirst(ed).then((go) => {
+        if (!go) return;
+        ed.change((doc) => Object.assign(doc, emptyDoc(), { settings: doc.settings }));
+        markSaved(ed.doc);
+      }),
   },
   {
     id: "open",
@@ -220,14 +240,18 @@ const builtins: Action[] = [
     ctrl: true,
     group: "file",
     run: (ed) =>
-      pickFile()
-        .then((doc) => {
-          ed.load(doc);
-          actions.get("fit").run(ed);
-        })
-        .catch((e: Error) => ed.flash(e.message)),
+      void saveFirst(ed).then((go) => {
+        if (!go) return;
+        pickFile()
+          .then((doc) => {
+            ed.load(doc);
+            markSaved(ed.doc);
+            actions.get("fit").run(ed);
+          })
+          .catch((e: Error) => ed.flash(e.message));
+      }),
   },
-  { id: "save", label: "action.save", icon: icons.save, shortcut: "s", ctrl: true, group: "file", run: (ed) => downloadDoc(ed.doc) },
+  { id: "save", label: "action.save", icon: icons.save, shortcut: "s", ctrl: true, group: "file", run: (ed) => (downloadDoc(ed.doc), markSaved(ed.doc)) },
   {
     id: "makeBody",
     label: "action.makeBody",

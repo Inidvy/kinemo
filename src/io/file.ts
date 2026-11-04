@@ -98,3 +98,35 @@ export function pickFile(): Promise<SketchDoc> {
     input.click();
   });
 }
+
+const SAVED_KEY = "kinemo.savedHash";
+let savedHash: string | null = null;
+try {
+  savedHash = localStorage.getItem(SAVED_KEY);
+} catch {
+  // No storage: then only this visit's saves count.
+}
+
+/** A short fingerprint of a document (FNV-1a), to tell whether it changed since it was last saved. */
+function fingerprint(doc: SketchDoc): string {
+  const s = JSON.stringify(doc);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
+  return `${s.length}:${(h >>> 0).toString(36)}`;
+}
+
+/** Remember `doc` as saved (downloaded, opened from a file, or a new empty sketch). */
+export function markSaved(doc: SketchDoc): void {
+  savedHash = fingerprint(doc);
+  try {
+    localStorage.setItem(SAVED_KEY, savedHash);
+  } catch {
+    // Best effort, like autosave.
+  }
+}
+
+/** True when the sketch has something in it that hasn't been saved to a file. */
+export function hasUnsavedWork(doc: SketchDoc): boolean {
+  if (!Object.keys(doc.points).length && !Object.keys(doc.geoms).length) return false;
+  return fingerprint(doc) !== savedHash;
+}
