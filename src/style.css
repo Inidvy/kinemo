@@ -1233,3 +1233,16 @@ details summary {
 .modal-btns .btn {
   margin: 0;
 }
+
+.label-input {
+  position: absolute;
+  transform: translate(-2px, -100%);
+  min-width: 140px;
+  padding: 3px 6px;
+  border: 2px solid var(--accent);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 13px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 5;
+}

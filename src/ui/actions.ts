@@ -179,7 +179,7 @@ const builtins: Action[] = [
       // In Motion mode the bodies; in the sketch every line, arc and circle, plus points that aren't part of one.
       if (ed.mode === "motion") return ed.select(Object.keys(ed.doc.bodies));
       const used = new Set(Object.values(ed.doc.geoms).flatMap((g) => geomPoints(g)));
-      ed.select([...Object.keys(ed.doc.geoms), ...Object.keys(ed.doc.points).filter((id) => !used.has(id))]);
+      ed.select([...Object.keys(ed.doc.geoms), ...Object.keys(ed.doc.points).filter((id) => !used.has(id)), ...Object.keys(ed.doc.labels ?? {})]);
     },
   },
   { id: "redo2", label: "action.redo", icon: icons.redo, shortcut: "z", ctrl: true, shift: true, run: (ed) => ed.redo() },
@@ -273,7 +273,9 @@ const builtins: Action[] = [
       const target = [...targets][0] as Id | undefined;
       const inTarget = new Set(target ? doc0.bodies[target].members : []);
       const owner = ownerMap(doc0);
-      const ids = [...ed.selection].filter((id) => (doc0.geoms[id] || doc0.points[id]) && !(target && owner.get(id) === target));
+      // Free labels join the body too; a label that names a point already moves with that point's body.
+      const freeLabel = (id: Id) => !!doc0.labels?.[id] && !doc0.labels[id].point;
+      const ids = [...ed.selection].filter((id) => (doc0.geoms[id] || doc0.points[id] || freeLabel(id)) && !(target && owner.get(id) === target));
       if (!ids.length) return ed.flash(t(target ? "body.nothingToAdd" : "hint.makeBody"));
       let created: Id = target ?? "";
       ed.change((doc) => {
@@ -352,6 +354,16 @@ const builtins: Action[] = [
     modes: MOTION,
     run: (ed) => ed.live((doc) => (doc.settings.jointLetters = doc.settings.jointLetters === false)),
     active: (ed) => ed.doc.settings.jointLetters !== false,
+  },
+  {
+    id: "labels",
+    label: "action.labels",
+    icon: icons.labels,
+    shortcut: "l",
+    shift: true,
+    group: "view",
+    run: (ed) => ed.live((doc) => (doc.settings.showLabels = doc.settings.showLabels === false)),
+    active: (ed) => ed.doc.settings.showLabels !== false,
   },
   {
     id: "motionLines",

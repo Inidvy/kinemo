@@ -13,7 +13,14 @@ import type { Snap, Tool, ToolEvent } from "./types";
 
 type DragState =
   /** `single`: one point dragged on its own, which can be dropped onto a point, a line's middle or a curve. */
-  | { kind: "points"; start: Vec; from: Map<Id, Vec>; single: { id: Id; exclude: Set<Id>; snap: Snap | null } | null }
+  | {
+      kind: "points";
+      start: Vec;
+      from: Map<Id, Vec>;
+      /** Selected labels that move by the drag themselves (not along with a point they name). */
+      labels: Map<Id, Vec>;
+      single: { id: Id; exclude: Set<Id>; snap: Snap | null } | null;
+    }
   | { kind: "radius"; circle: Id }
   | { kind: "label"; cid: Id }
   | { kind: "box"; start: Vec; now: Vec; additive: boolean };
@@ -44,6 +51,11 @@ export const selectTool: Tool = {
       drag = { kind: "box", start: e.screen, now: e.screen, additive: e.shift || e.ctrl };
       return;
     }
+    if (e.double && h.kind === "label") {
+      ed.onEditLabel?.({ id: h.id });
+      drag = null;
+      return;
+    }
     if (e.double && h.kind === "dimension") {
       ed.onEditDimension?.(h.id);
       drag = null;
@@ -61,14 +73,19 @@ export const selectTool: Tool = {
       drag = { kind: "label", cid: h.id };
     } else if (h.kind === "geom" && h.part === "rim") {
       drag = { kind: "radius", circle: h.id };
-    } else if (h.kind === "point" || h.kind === "geom") {
-      // Move every selected point and geometry together.
+    } else if (h.kind === "point" || h.kind === "geom" || h.kind === "label") {
+      // Move every selected point, geometry and label together.
       const from = new Map<Id, Vec>();
       for (const id of ed.selection) {
         for (const p of pointsOf(ed.doc, id)) from.set(p, { ...ed.doc.points[p] });
       }
+      const labels = new Map<Id, Vec>();
+      for (const id of ed.selection) {
+        const l = ed.doc.labels?.[id];
+        if (l && !(l.point && from.has(l.point))) labels.set(id, { x: l.x, y: l.y });
+      }
       const single = h.kind === "point" && ed.selection.size === ids.length && ids.every((id) => ed.selection.has(id)) && !e.ctrl;
-      drag = { kind: "points", start: e.world, from, single: single ? { id: h.id, exclude: snapExclusions(ed.doc, h.id), snap: null } : null };
+      drag = { kind: "points", start: e.world, from, labels, single: single ? { id: h.id, exclude: snapExclusions(ed.doc, h.id), snap: null } : null };
     } else {
       drag = null;
     }
@@ -93,7 +110,13 @@ export const selectTool: Tool = {
         if (one.snap) for (const tg of targets) tg.to = one.snap.at;
         ed.snap = one.snap;
       }
-      ed.drag(targets);
+      if (targets.length) ed.drag(targets);
+      if (drag.labels.size) {
+        const labels = drag.labels;
+        ed.live((doc) => {
+          for (const [id, p] of labels) Object.assign(doc.labels[id], { x: p.x + d.x, y: p.y + d.y });
+        });
+      }
     } else if (drag.kind === "radius") {
       const g = ed.doc.geoms[drag.circle];
       if (g?.kind !== "circle") return;

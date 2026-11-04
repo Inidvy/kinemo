@@ -23,6 +23,8 @@ export const colors = {
   dimension: "#1d1f24",
   /** Watched (measure-only) dimensions. */
   watch: "#0b8a7a",
+  /** Text labels. */
+  label: "#2b2f36",
   /** Traced paths. */
   trace: "#d81b60",
   boxSelect: "rgba(32,105,224,0.08)",

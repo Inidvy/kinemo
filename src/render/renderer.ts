@@ -11,6 +11,9 @@ import { drawBodies, drawBodyLines, drawJointLetters, drawJoints, drawLooseGeome
 import { posedDoc } from "../motion/bodies";
 import { drawTraces } from "./traces";
 import { relationGroups, type GroupColors } from "./relations";
+import { drawLabels, layoutLabels } from "./labels";
+import { labelAt, labelMotionAt } from "../core/labels";
+import { ownerMap } from "../motion/bodies";
 
 /** Draws the sketch. Stateless: everything comes from the editor. */
 export function render(ctx: CanvasRenderingContext2D, ed: Editor, w: number, h: number): void {
@@ -29,6 +32,10 @@ export function render(ctx: CanvasRenderingContext2D, ed: Editor, w: number, h: 
     drawTraces(ctx, ed);
     drawJoints(ctx, ed);
     drawJointLetters(ctx, ed);
+    if (doc.settings.showLabels !== false) {
+      const owner = ownerMap(doc);
+      drawLabels(ctx, layoutLabels(doc, v, (l) => labelMotionAt(doc, owner, l)), () => false, () => false);
+    }
     // Watched dimensions, measured where the bodies are now.
     const posed = posedDoc(doc);
     for (const d of layoutDims(posed, v, true)) drawDimension(ctx, v, d, ed.selection.has(d.cid), ed.hover === d.cid, null, colors.watch);
@@ -75,6 +82,15 @@ export function render(ctx: CanvasRenderingContext2D, ed: Editor, w: number, h: 
     ctx.beginPath();
     ctx.arc(s.x, s.y, sel || hov ? 4 : 2.6, 0, Math.PI * 2);
     ctx.fill();
+  }
+
+  if (doc.settings.showLabels !== false) {
+    drawLabels(
+      ctx,
+      layoutLabels(doc, v, (l) => labelAt(doc, l)),
+      (id) => ed.selection.has(id) || selRefs.has(id),
+      (id) => ed.hover === id || hoverRefs.has(id),
+    );
   }
 
   for (const d of layoutDims(doc, v)) {

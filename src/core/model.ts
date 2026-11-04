@@ -67,6 +67,8 @@ export interface Settings {
   solidBars: boolean;
   /** Draw each joint's letter beside it in Motion mode (default on). */
   jointLetters?: boolean;
+  /** Draw text labels (default on), in the sketch and in Motion. */
+  showLabels?: boolean;
   /** Draw the sketch lines over the bars in Motion and Animation (default on). */
   motionLines?: boolean;
   /** Colour each group of equal lines, and mark each group of parallel lines, in its own colour. */
@@ -80,11 +82,30 @@ export interface Pen {
   color?: string;
 }
 
+/**
+ * A text label on the sketch. A free label sits at (x, y) and can be grouped
+ * into a body; a label that names a point sits at an offset from it and
+ * follows it (and its body) everywhere.
+ */
+export interface Label {
+  id: Id;
+  text: string;
+  /** Sketch position, or for a label that names a point, the offset from that point. */
+  x: number;
+  y: number;
+  /** The point this label names. */
+  point?: Id;
+  /** Text height in screen pixels (default 13). */
+  size?: number;
+  /** CSS colour (default dark grey). */
+  color?: string;
+}
+
 /** A rigid group of sketch geometry. In Motion mode it moves as one bar. */
 export interface Body {
   id: Id;
   name: string;
-  /** Geometry (and loose point) ids that belong to the body. */
+  /** Geometry, loose point and free label ids that belong to the body. */
   members: Id[];
   /** Ground bodies never move. */
   ground?: boolean;
@@ -151,6 +172,8 @@ export interface SketchDoc {
   settings: Settings;
   bodies: Record<Id, Body>;
   motion: MotionState;
+  /** Text labels (older files have none). */
+  labels: Record<Id, Label>;
 }
 
 export const DOC_VERSION = 3;
@@ -165,6 +188,7 @@ export function emptyDoc(): SketchDoc {
     settings: { barWidth: 8, showConstraintIcons: true, solidBars: false },
     bodies: {},
     motion: { poses: {}, drivers: {} },
+    labels: {},
   };
 }
 
@@ -240,6 +264,15 @@ export function deleteItems(doc: SketchDoc, ids: Id[]): void {
     for (const p of geomPoints(g)) if (!stillUsed.has(p)) pointIds.add(p);
     delete doc.geoms[gid];
   }
+  // Labels go when deleted; one that named a deleted point stays where it was, as a free label.
+  doc.labels ??= {};
+  for (const id of ids) delete doc.labels[id];
+  for (const l of Object.values(doc.labels)) {
+    if (!l.point || !pointIds.has(l.point)) continue;
+    const p = doc.points[l.point];
+    delete l.point;
+    if (p) Object.assign(l, { x: p.x + l.x, y: p.y + l.y });
+  }
   for (const pid of pointIds) delete doc.points[pid];
 
   const gone = new Set([...pointIds, ...geomIds]);
@@ -254,7 +287,7 @@ export function deleteItems(doc: SketchDoc, ids: Id[]): void {
 /** Drop body members, empty bodies, poses and drivers that point at things that are gone. */
 export function pruneBodies(doc: SketchDoc): void {
   for (const b of Object.values(doc.bodies)) {
-    b.members = b.members.filter((id) => id in doc.geoms || id in doc.points);
+    b.members = b.members.filter((id) => id in doc.geoms || id in doc.points || id in (doc.labels ?? {}));
     if (!b.members.length) delete doc.bodies[b.id];
   }
   for (const id of Object.keys(doc.motion.poses)) if (!doc.bodies[id]) delete doc.motion.poses[id];
