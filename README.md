@@ -74,6 +74,7 @@ Select geometry and press G to group it into one rigid body. Select a point and 
 | Ctrl+C / Ctrl+V / Ctrl+X / Ctrl+D | Copy, paste at the pointer, cut, duplicate (Sketch) |
 | K | Set keyframes at the playhead |
 | L | Show or hide the joint letters (pins stacked on one point share a letter) |
+| H | Show or hide the sketch lines over the bars (also in Animation and exports) |
 | Space | Play or pause the timeline |
 | Delete | Delete the selected keys on the timeline (otherwise the selected sliders) |
 

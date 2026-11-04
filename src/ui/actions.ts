@@ -354,6 +354,17 @@ const builtins: Action[] = [
     active: (ed) => ed.doc.settings.jointLetters !== false,
   },
   {
+    id: "motionLines",
+    label: "action.motionLines",
+    icon: icons.motionLines,
+    shortcut: "h",
+    shift: false,
+    group: "view",
+    modes: MOTION,
+    run: (ed) => ed.live((doc) => (doc.settings.motionLines = doc.settings.motionLines === false)),
+    active: (ed) => ed.doc.settings.motionLines !== false,
+  },
+  {
     id: "flip",
     label: "action.flip",
     icon: icons.flip,

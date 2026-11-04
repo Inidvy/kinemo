@@ -631,6 +631,7 @@ function bodyDistance(doc: SketchDoc, v: View, b: Body, s: Vec, discs: Set<Id>):
  * sketch, dashed for construction lines.
  */
 export function drawBodyLines(ctx: CanvasRenderingContext2D, ed: Editor): void {
+  if (ed.doc.settings.motionLines === false) return;
   const doc = ed.doc;
   ctx.save();
   ctx.lineWidth = 1.5;
@@ -649,6 +650,7 @@ export function drawBodyLines(ctx: CanvasRenderingContext2D, ed: Editor): void {
 
 /** Sketch geometry that isn't in any body, drawn faintly in Motion mode. */
 export function drawLooseGeometry(ctx: CanvasRenderingContext2D, ed: Editor): void {
+  if (ed.doc.settings.motionLines === false) return;
   const doc = ed.doc;
   const own = ed.mech.owner;
   ctx.save();

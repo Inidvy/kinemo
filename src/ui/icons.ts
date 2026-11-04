@@ -62,6 +62,8 @@ const paths = {
   clock: [circ(12, 12, 9), "M12 7v5l3 2"],
   pause: ["M6 4h4v16H6z", "M14 4h4v16h-4z"],
   stop: ["M5 5h14v14H5z"],
+  // A dashed line over a bar: show the sketch lines in Motion.
+  motionLines: ["M3 9h18v6H3z", "M4 12h3", "M10.5 12h3", "M17 12h3"],
   letters: ["M5 20l7-16 7 16", "M8 14h8"],
   key: ["M12 2.5l9.5 9.5-9.5 9.5L2.5 12z"],
   trace: ["M3 17c3-8 6-8 9-3s6 5 9-3", circ(12, 14, 2)],

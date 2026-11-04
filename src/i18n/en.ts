@@ -44,6 +44,7 @@ export const en: Record<string, string> = {
   "action.ground": "Toggle ground",
   "action.bars": "Solid bars",
   "action.letters": "Show joint letters",
+  "action.motionLines": "Show sketch lines",
   "action.flip": "Flip",
   "action.resetPose": "Reset",
   "action.mode": "Switch Sketch / Motion",
