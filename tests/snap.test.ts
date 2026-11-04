@@ -144,3 +144,31 @@ describe("relation colours", () => {
     expect(relationGroups(doc, "parallel").size).toBe(0);
   });
 });
+
+import { snapIsSafe } from "../src/tools/snap";
+
+describe("snapping on drop", () => {
+  let solver: Solver;
+  beforeAll(async () => { solver = await Solver.create(); });
+
+  it("doesn't add a coincident where other constraints already hold the point", () => {
+    const { doc, l1 } = twoLines();
+    const p = addPoint(doc, 20, 1), m = addPoint(doc, 20, 1);
+    addConstraint(doc, { type: "midpoint", refs: [p, l1] });
+    addConstraint(doc, { type: "midpoint", refs: [m, l1] });
+    expect(snapIsSafe(solver, doc, { type: "coincident", refs: [m, p] })).toBe(false);
+  });
+
+  it("still joins points that aren't held together yet", () => {
+    const { doc, a2, b1 } = twoLines();
+    expect(snapIsSafe(solver, doc, { type: "coincident", refs: [a2, b1] })).toBe(true);
+  });
+
+  it("skips a coincident between points already joined", () => {
+    const { doc, a2, b1 } = twoLines();
+    const c = addPoint(doc, 40, 2);
+    addConstraint(doc, { type: "coincident", refs: [a2, c] });
+    addConstraint(doc, { type: "coincident", refs: [c, b1] });
+    expect(snapConstraint(doc, b1, { kind: "point", id: a2, at: { x: 40, y: 2 } })).toBeNull();
+  });
+});

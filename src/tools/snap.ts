@@ -8,6 +8,9 @@ import { stackOf } from "../constraints/select";
 import { constraintTypes } from "../constraints";
 import { drawConstraintIcon } from "../ui/icons";
 import type { Snap } from "./types";
+import { Solver } from "../solver/solver";
+import { cloneDoc } from "../core/model";
+import { addConstraintSmart } from "../constraints/select";
 
 /** How close (screen px) the cursor must come to a line's middle to snap to it. */
 const MID_R = 9;
@@ -72,6 +75,8 @@ export function snapConstraint(doc: SketchDoc, p: Id, snap: Snap): { type: strin
       : snap.kind === "midpoint"
         ? { type: "midpoint", refs: [p, snap.id] }
         : { type: "onCurve", refs: [p, snap.id] };
+  // Already joined through other coincident points: another one would only be redundant.
+  if (snap.kind === "point" && stackOf(doc, p).includes(snap.id)) return null;
   const same = (a: Id[], b: Id[]) => a.length === b.length && a.every((r) => b.includes(r));
   if (Object.values(doc.constraints).some((x) => x.type === c.type && same(x.refs, c.refs))) return null;
   return c;
@@ -106,4 +111,16 @@ export function drawSnap(ctx: CanvasRenderingContext2D, view: View, snap: Snap |
   ctx.font = "11px system-ui, sans-serif";
   ctx.fillText(t(constraintTypes.get(type).label), s.x + 27, s.y - 11);
   ctx.restore();
+}
+
+/**
+ * Whether adding the snap constraint keeps the sketch solvable without
+ * conflicts or redundancy. A dropped point can land where other constraints
+ * already hold it (closing a loop that dimensions already close, say), and
+ * then one more coincident would only turn the sketch red.
+ */
+export function snapIsSafe(solver: Solver, doc: SketchDoc, c: { type: string; refs: Id[] }): boolean {
+  const next = cloneDoc(doc);
+  if (!addConstraintSmart(next, c)) return true;
+  return Solver.clean(solver.solve(next));
 }
