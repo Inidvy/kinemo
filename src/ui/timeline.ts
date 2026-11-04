@@ -1,7 +1,7 @@
 import type { Editor } from "../app/editor";
 import type { Id, Keyframe, Timeline } from "../core/model";
 import { jointKinds } from "../motion/joints";
-import { clipTime, DEFAULT_TIMELINE, deleteKeys, keysFromRecording, setKey, shiftKeys, timelineOf, valueAt, valuesAt, type KeyRef } from "../motion/timeline";
+import { clipTime, DEFAULT_TIMELINE, deleteKeys, keysFromRecording, setKey, shiftKeys, spinDirection, spinKeys, timelineOf, valueAt, valuesAt, type KeyRef } from "../motion/timeline";
 import { t } from "../i18n";
 import { icons } from "./icons";
 import { driverName } from "./motionPanels";
@@ -444,7 +444,13 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
             return `${seg}<span class="tl-key${on ? " on" : ""}" data-key="${i}" data-driver="${d.id}" style="left:${pct(k.t)}" title="${k.t.toFixed(2)} s · ${fmt(ed, d.id, k.v)}"></span>`;
           })
           .join("");
-        const label = `<div class="tl-name${ed.selection.has(d.id) || ed.selection.has(d.joint) ? " sel" : ""}" data-pick="${d.joint}" title="${esc(driverName(ed, d))}">${esc(driverName(ed, d))}</div>`;
+        const span = spinSpan(d.joint);
+        const dir = span ? spinDirection(keys, span) : 0;
+        // A joint that goes round gets a button that keys one full turn over the clip.
+        const spin = span
+          ? `<button class="tl-spin${dir ? " on" : ""}" data-tl="spin" data-driver="${d.id}" title="${t(dir > 0 ? "timeline.spinBack" : "timeline.spinTip")}">${dir < 0 ? "↺" : "↻"}</button>`
+          : "";
+        const label = `<div class="tl-name${ed.selection.has(d.id) || ed.selection.has(d.joint) ? " sel" : ""}" data-pick="${d.joint}" title="${esc(driverName(ed, d))}">${spin}${esc(driverName(ed, d))}</div>`;
         return `${label}<div class="tl-lane" data-driver="${d.id}">${diamonds}</div>`;
       })
       .join("");
@@ -549,6 +555,27 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
       doc.motion.timeline = tl;
     });
 
+  /** How far one full turn of a joint's slider goes (360° for a crank, the length of a closed track), or 0 if it doesn't go round. */
+  function spinSpan(jointId: Id): number {
+    const j = ed.mech.joint(jointId);
+    const kind = j && jointKinds.get(j.kind);
+    if (!j || !kind?.wraps?.(j)) return 0;
+    const [lo, hi] = kind.range(ed.doc, j);
+    return hi - lo;
+  }
+
+  /** Key a full turn from where the joint is now; pressed again, turn the other way. */
+  const spin = (driverId: Id) => {
+    const d = ed.doc.motion.drivers[driverId];
+    const span = d ? spinSpan(d.joint) : 0;
+    if (!span) return;
+    const tl = timelineOf(ed.doc);
+    const dir = spinDirection(tl.keys[driverId], span) > 0 ? -1 : 1;
+    const from = tl.keys[driverId]?.[0]?.v ?? ed.mech.measure(ed.mech.current(), d.joint);
+    editTimeline((x) => spinKeys(x, driverId, from, dir * span));
+    ed.flash(t(dir > 0 ? "timeline.spinOn" : "timeline.spinReversed"));
+  };
+
   el.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;
     const b = target.closest<HTMLElement>("[data-tl]");
@@ -558,6 +585,7 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
       if (what === "play") p.toggle();
       if (what === "stop") p.toStart();
       if (what === "delall") p.deleteAllKeys();
+      if (what === "spin") spin(b.dataset.driver!);
       if (what === "key") p.key();
       if (what === "video") {
         if (video) p.stop();
