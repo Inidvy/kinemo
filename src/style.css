@@ -1157,3 +1157,14 @@ details summary {
 .tl-clip .tl-delall:not(:disabled):hover {
   color: var(--bad);
 }
+
+/* Sketch line colours: the Auto swatch is a split blue/black disc. */
+.pick.auto { background: linear-gradient(135deg, #2069e0 50%, #1d1f24 50%); }
+
+/* Constraints on the selection, each with its own delete button. */
+.cons-list { padding: 0 12px; }
+.cons-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+.cons-row span { flex: 1; }
+.cons-row.bad { color: #d93025; }
+.cons-row .x { border: 0; background: none; font-size: 16px; line-height: 1; color: var(--muted); cursor: pointer; padding: 0 4px; }
+.cons-row .x:hover { color: #d93025; }

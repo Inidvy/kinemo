@@ -6,12 +6,14 @@ import type { Hit } from "../render/hit";
 export type Snap =
   | { kind: "point"; id: Id; at: Vec }
   | { kind: "curve"; id: Id; at: Vec }
+  /** The middle of a line (`id` is the line). */
+  | { kind: "midpoint"; id: Id; at: Vec }
   | { kind: "none"; at: Vec };
 
 export interface ToolEvent {
   world: Vec;
   screen: Vec;
-  /** Snap target for drawing tools (points, then curves). */
+  /** Snap target for drawing tools (points, then line middles, then curves). */
   snap: Snap;
   /** Anything under the cursor, including icons and dimension labels. */
   hit: Hit | null;

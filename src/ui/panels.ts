@@ -2,6 +2,7 @@ import type { Editor } from "../app/editor";
 import { arcRadius, type Geometry, type Id } from "../core/model";
 import { dist } from "../core/geom";
 import { constraintTypes } from "../constraints";
+import { fitSelection } from "../constraints/select";
 import { dimText, isWatched, measured } from "../render/layout";
 import { t } from "../i18n";
 import { actions } from "./actions";
@@ -87,6 +88,21 @@ export function mountFeatureTree(el: HTMLElement, ed: Editor): void {
 /** Right panel: properties of the selection and the constraints it allows. */
 export function mountProperties(el: HTMLElement, ed: Editor, sliders: SliderMotion): void {
   el.addEventListener("click", (e) => {
+    const line = (e.target as HTMLElement).closest<HTMLElement>("[data-line-color]");
+    if (line) {
+      // "" is Auto: back to blue/black for free/defined.
+      const color = line.dataset.lineColor || undefined;
+      const ids = [...ed.selection].filter((id) => id in ed.doc.geoms);
+      if (ids.length) ed.change((doc) => ids.forEach((id) => (color ? (doc.geoms[id].color = color) : delete doc.geoms[id].color)));
+      else ed.live((doc) => (doc.settings.pen = { ...doc.settings.pen, color }));
+      return;
+    }
+    const remove = (e.target as HTMLElement).closest<HTMLElement>("[data-remove]");
+    if (remove) {
+      const cid = remove.dataset.remove!;
+      ed.change((doc) => delete doc.constraints[cid]);
+      return;
+    }
     const pick = (e.target as HTMLElement).closest<HTMLElement>("[data-color]");
     if (pick) {
       const id = pick.dataset.id!, color = pick.dataset.color!;
@@ -106,7 +122,11 @@ export function mountProperties(el: HTMLElement, ed: Editor, sliders: SliderMoti
       const v = parseFloat(input.value);
       if (Number.isFinite(v) && v > 0) ed.change((doc) => (doc.constraints[id].value = v));
     } else if (field === "construction" || field === "track") {
-      ed.change((doc) => (doc.geoms[id][field] = input.checked));
+      // Every selected line, arc and circle, so several can be switched at once.
+      const ids = [...ed.selection].filter((g) => g in ed.doc.geoms);
+      ed.change((doc) => ids.forEach((g) => (doc.geoms[g][field] = input.checked)));
+    } else if (field === "penConstruction") {
+      ed.live((doc) => (doc.settings.pen = { ...doc.settings.pen, construction: input.checked }));
     } else if (field === "bodyName") {
       const name = input.value.trim();
       if (name) ed.change((doc) => (doc.bodies[id].name = name));
@@ -178,7 +198,11 @@ export function mountProperties(el: HTMLElement, ed: Editor, sliders: SliderMoti
     let html = `<div class="panel-title">${t("panel.properties")}</div>`;
 
     if (sel.length === 0) {
+      const pen = doc.settings.pen ?? {};
       html += `<p class="muted">${t("panel.nothingSelected")}</p>
+        <div class="panel-title">${t("panel.pen")}</div>
+        ${check("", "penConstruction", !!pen.construction, t("panel.construction") + " (X)")}
+        ${colorField(pen.color)}
         <div class="panel-title">${t("panel.settings")}</div>
         <label class="field">${t("panel.barWidth")}<input type="number" min="0.5" step="0.5" data-field="barWidth" data-id="" value="${doc.settings.barWidth}"></label>`;
     } else if (sel.length === 1 && doc.constraints[sel[0]]) {
@@ -199,14 +223,29 @@ export function mountProperties(el: HTMLElement, ed: Editor, sliders: SliderMoti
       if (g.kind === "line") html += readout(t("panel.length"), dist(doc.points[g.p1], doc.points[g.p2]));
       if (g.kind === "circle") html += readout(t("panel.radius"), g.r);
       if (g.kind === "arc") html += readout(t("panel.radius"), arcRadius(doc, g));
-      html += check(g.id, "construction", !!g.construction, t("panel.construction") + " (X)");
-      html += check(g.id, "track", !!g.track, t("panel.track") + " (K)");
+      html += geomFlags([g]);
     } else if (sel.length === 1 && doc.points[sel[0]]) {
       const p = doc.points[sel[0]];
       html += `<div class="prop-head">${t("geom.point")}</div>`;
       html += `<div class="readout"><span>${t("panel.position")}</span><b>${p.x.toFixed(2)}, ${p.y.toFixed(2)}</b></div>`;
     } else {
       html += `<div class="prop-head">${t("panel.selected", { n: sel.length })}</div>`;
+      const gs = sel.map((id) => doc.geoms[id]).filter(Boolean);
+      if (gs.length) html += geomFlags(gs);
+    }
+
+    // Constraints already on the selected items, each with its own delete button.
+    const on = new Set(sel.filter((id) => id in doc.points || id in doc.geoms));
+    const existing = Object.values(doc.constraints).filter((c) => c.refs.some((r) => on.has(r)));
+    if (existing.length) {
+      html += `<div class="panel-title">${t("panel.constraints")}</div><div class="cons-list">`;
+      html += existing
+        .map((c) => {
+          const def = constraintTypes.get(c.type);
+          return `<div class="cons-row${ed.analysis.conflicting.has(c.id) ? " bad" : ""}">${constraintIcon(def.id, esc(def.glyph), 14)}<span>${esc(constraintName(ed, c.id))}</span><button class="x" data-remove="${c.id}" title="${t("panel.delete")}">×</button></div>`;
+        })
+        .join("");
+      html += `</div>`;
     }
 
     // Constraints that fit the current selection.
@@ -214,7 +253,7 @@ export function mountProperties(el: HTMLElement, ed: Editor, sliders: SliderMoti
     if (geomSel.length) {
       const fits = constraintTypes
         .all()
-        .filter((c) => !c.dimension && !c.hidden && typeof c.fromSelection(doc, geomSel) !== "string");
+        .filter((c) => !c.dimension && !c.hidden && typeof fitSelection(c, doc, geomSel) !== "string");
       if (fits.length) {
         html += `<div class="panel-title">${t("panel.addConstraint")}</div><div class="chips">`;
         html += fits
@@ -228,6 +267,26 @@ export function mountProperties(el: HTMLElement, ed: Editor, sliders: SliderMoti
 
   ed.subscribe(update);
   update();
+}
+
+/** Colours a line, arc or circle can be given; "" is Auto (blue while free, black once defined). */
+const LINE_COLORS = ["", "#d93025", "#f28c18", "#2e9d4f", "#0b8a7a", "#2069e0", "#8e44ad", "#d81b60", "#5f6b7a"];
+
+function colorField(current: string | undefined): string {
+  const picks = LINE_COLORS.map((c) => {
+    const on = (current ?? "") === c ? " on" : "";
+    const style = c ? `background:${c}` : "";
+    return `<button class="pick${c ? "" : " auto"}${on}" data-line-color="${c}" style="${style}" title="${c || t("panel.colorAuto")}"></button>`;
+  }).join("");
+  return `<div class="field">${t("panel.color")}<span class="palette">${picks}</span></div>`;
+}
+
+/** Construction, track and colour for one or more selected lines, arcs and circles. */
+function geomFlags(gs: Geometry[]): string {
+  const first = gs[0].id;
+  const all = (f: "construction" | "track") => gs.every((g) => g[f]);
+  const color = gs.every((g) => g.color === gs[0].color) ? gs[0].color : "mixed";
+  return check(first, "construction", all("construction"), t("panel.construction") + " (X)") + check(first, "track", all("track"), t("panel.track") + " (K)") + colorField(color);
 }
 
 function readout(label: string, v: number): string {

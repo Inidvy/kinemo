@@ -32,6 +32,12 @@ export const actions = new Registry<Action>("actions");
 
 function toggleFlag(ed: Editor, flag: "construction" | "track") {
   const ids = [...ed.selection].filter((id) => id in ed.doc.geoms);
+  if (!ids.length && flag === "construction") {
+    // With nothing selected, X switches what new lines are drawn as.
+    const on = !ed.doc.settings.pen?.construction;
+    ed.live((doc) => (doc.settings.pen = { ...doc.settings.pen, construction: on }));
+    return ed.flash(t(on ? "pen.constructionOn" : "pen.constructionOff"));
+  }
   if (!ids.length) return;
   const on = !ids.every((id) => ed.doc.geoms[id][flag]);
   ed.change((doc) => ids.forEach((id) => (doc.geoms[id][flag] = on)));
@@ -105,7 +111,20 @@ function paste(ed: Editor): void {
 const MOTION: Mode[] = ["motion"];
 
 const builtins: Action[] = [
-  { id: "construction", label: "action.construction", icon: icons.construction, shortcut: "x", group: "edit", modes: SKETCH, run: (ed) => toggleFlag(ed, "construction") },
+  {
+    id: "construction",
+    label: "action.construction",
+    icon: icons.construction,
+    shortcut: "x",
+    group: "edit",
+    modes: SKETCH,
+    run: (ed) => toggleFlag(ed, "construction"),
+    // Pressed while new lines are drawn as construction, or when every selected line is one.
+    active(ed) {
+      const ids = [...ed.selection].filter((id) => id in ed.doc.geoms);
+      return ids.length ? ids.every((id) => ed.doc.geoms[id].construction) : !!ed.doc.settings.pen?.construction;
+    },
+  },
   { id: "track", label: "action.track", icon: icons.track, shortcut: "k", group: "edit", modes: SKETCH, run: (ed) => toggleFlag(ed, "track") },
   {
     id: "delete",
@@ -134,6 +153,19 @@ const builtins: Action[] = [
   { id: "cut", label: "action.cut", icon: icons.delete, shortcut: "x", ctrl: true, modes: SKETCH, run: (ed) => copy(ed) && actions.get("delete").run(ed) },
   { id: "paste", label: "action.paste", icon: icons.new, shortcut: "v", ctrl: true, modes: SKETCH, run: paste },
   { id: "duplicate", label: "action.duplicate", icon: icons.new, shortcut: "d", ctrl: true, modes: SKETCH, run: (ed) => copy(ed) && paste(ed) },
+  {
+    id: "selectAll",
+    label: "action.selectAll",
+    icon: icons.select,
+    shortcut: "a",
+    ctrl: true,
+    run(ed) {
+      // In Motion mode the bodies; in the sketch every line, arc and circle, plus points that aren't part of one.
+      if (ed.mode === "motion") return ed.select(Object.keys(ed.doc.bodies));
+      const used = new Set(Object.values(ed.doc.geoms).flatMap((g) => geomPoints(g)));
+      ed.select([...Object.keys(ed.doc.geoms), ...Object.keys(ed.doc.points).filter((id) => !used.has(id))]);
+    },
+  },
   { id: "redo2", label: "action.redo", icon: icons.redo, shortcut: "z", ctrl: true, shift: true, run: (ed) => ed.redo() },
   {
     id: "icons",

@@ -4,6 +4,9 @@ import { Mechanism, type MotionDrag } from "../motion/kinematics";
 import { degenerate, Solver, type DragTarget } from "../solver/solver";
 import { View } from "../render/view";
 import { constraintTypes } from "../constraints";
+import { addConstraintSmart, fitSelection } from "../constraints/select";
+import type { Snap } from "../tools/types";
+import { tools } from "../tools";
 import { t } from "../i18n";
 
 export interface Analysis {
@@ -37,6 +40,8 @@ export class Editor {
   hover: Id | null = null;
   /** Where the pointer is over the canvas (world coordinates), or null when it is elsewhere. */
   cursor: { x: number; y: number } | null = null;
+  /** What a point placed or dropped now would attach to; marked on the canvas. */
+  snap: Snap | null = null;
   tool = "select";
   mode: Mode = "sketch";
   /** In Motion mode: the Animation tab (timeline, chart, export) is open. */
@@ -136,11 +141,19 @@ export class Editor {
     for (const fn of this.listeners) fn();
   }
 
-  /** Make an undoable change, then solve. */
-  change(mutate: (doc: SketchDoc) => void): void {
-    const before = this.doc;
-    const next = cloneDoc(before);
+  /** Make an undoable change, then solve. `before` is what undo goes back to (the current document unless given). */
+  change(mutate: (doc: SketchDoc) => void, before: SketchDoc = this.doc): void {
+    const next = cloneDoc(this.doc);
     mutate(next);
+    // Geometry a drawing tool just made takes the pen's construction flag and colour.
+    const pen = next.settings.pen;
+    if (pen && tools.find(this.tool)?.snaps) {
+      for (const g of Object.values(next.geoms)) {
+        if (g.id in before.geoms) continue;
+        if (pen.construction) g.construction = true;
+        if (pen.color) g.color = pen.color;
+      }
+    }
     const touched = changedConstraints(before, next);
     if (touched.size) this.recent = touched;
     else for (const id of [...this.recent]) if (!(id in next.constraints)) this.recent.delete(id);
@@ -193,9 +206,12 @@ export class Editor {
     this.emit();
   }
 
-  endDrag(): void {
-    if (this.dragStart) this.history.record(this.dragStart, this.doc);
+  /** Finish a drag. `then` makes a last change (like snapping the dropped point) in the same undo step. */
+  endDrag(then?: (doc: SketchDoc) => void): void {
+    const start = this.dragStart;
     this.dragStart = null;
+    if (then && start) return this.change(then, start);
+    if (start) this.history.record(start, this.doc);
     this.reanalyse();
     this.emit();
   }
@@ -227,6 +243,7 @@ export class Editor {
 
   setTool(id: string): void {
     this.tool = id;
+    this.snap = null;
     this.emit();
   }
 
@@ -243,17 +260,12 @@ export class Editor {
   applyConstraint(type: string, quiet = false): boolean {
     const def = constraintTypes.get(type);
     const sel = [...this.selection].filter((id) => id in this.doc.points || id in this.doc.geoms);
-    const out = def.fromSelection(this.doc, sel);
+    const out = fitSelection(def, this.doc, sel);
     if (typeof out === "string") {
       if (!quiet) this.flash(t(out));
       return false;
     }
-    this.change((doc) => {
-      for (const c of out) {
-        const id = `c${doc.nextId++}`;
-        doc.constraints[id] = { ...c, id };
-      }
-    });
+    this.change((doc) => out.forEach((c) => addConstraintSmart(doc, c)));
     return true;
   }
 

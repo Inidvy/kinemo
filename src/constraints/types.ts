@@ -4,8 +4,8 @@ import type { Constraint, Id, SketchDoc, Vec } from "../core/model";
 export type Primitive = Record<string, unknown> & { id: string; type: string };
 
 export type DimensionShape =
-  /** Linear distance between two world points, drawn offset along `normal`. */
-  | { kind: "linear"; a: Vec; b: Vec }
+  /** Linear distance between two world points, drawn offset to the side. With `axis`, only its horizontal (x) or vertical (y) part. */
+  | { kind: "linear"; a: Vec; b: Vec; axis?: "x" | "y" }
   /** Angle at `center` from direction d1 to d2 (radians). */
   | { kind: "angle"; center: Vec; d1: number; d2: number }
   /** Radius or diameter of a circle around `center`. */
@@ -37,6 +37,8 @@ export interface ConstraintType {
 
   /** World position for the canvas icon (non-dimension constraints). */
   anchor?(doc: SketchDoc, c: Constraint): Vec;
+  /** For a relation between equals (parallel, equal): an icon on each item instead of one at `anchor`. */
+  anchors?(doc: SketchDoc, c: Constraint): Vec[];
 
   /** Shape for drawing a dimension. */
   shape?(doc: SketchDoc, c: Constraint): DimensionShape;

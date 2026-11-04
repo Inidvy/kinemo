@@ -3,7 +3,7 @@ import type { ConstraintType } from "./types";
 import { coincident, onCurve } from "./defs/coincident";
 import { horizontal, vertical } from "./defs/orientation";
 import { parallel, perpendicular, tangent, equal, concentric, midpoint, symmetric, fix, groundPoint } from "./defs/relations";
-import { distance, angle, diameter, radius } from "./defs/dimensions";
+import { distance, distanceX, distanceY, angle, diameter, radius } from "./defs/dimensions";
 
 export const constraintTypes = new Registry<ConstraintType>("constraints");
 
@@ -23,6 +23,8 @@ export const constraintTypes = new Registry<ConstraintType>("constraints");
   fix,
   groundPoint,
   distance,
+  distanceX,
+  distanceY,
   angle,
   diameter,
   radius,
