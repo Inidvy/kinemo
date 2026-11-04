@@ -24,6 +24,7 @@ Pushing to `main` deploys to GitHub Pages (Settings → Pages → Source: GitHub
 | A | Arc (centre, start, end; direction follows the cursor) |
 | C | Circle |
 | O | Point |
+| Shift+T | Text: click to place a label, or click a point to name it (the label sits beside the point and follows it); type and press Enter. Click a label with Text, or double-click it with Select, to change it; clear its text to delete it |
 | R / Shift+R | Rectangle by two corners / by centre and corner |
 | D | Dimension: click geometry (or select it first), a preview follows the cursor, click where the label goes, type a value. For a line or two points the label's place picks the kind: beside the line gives its length, above or below gives the horizontal distance, left or right the vertical one. Click an existing dimension to change its value |
 | M | Measure: like Dimension, but the reading only shows the length (in brackets, teal) and follows the sketch as it moves, without fixing anything |
@@ -33,6 +34,7 @@ Pushing to `main` deploys to GitHub Pages (Settings → Pages → Source: GitHub
 | X | Toggle construction on the selected lines; with nothing selected, switch whether new lines are drawn as construction |
 | K | Tag as track |
 | I | Show or hide constraint icons |
+| Shift+L | Show or hide text labels (in the sketch and in Motion, separate from the lines) |
 | Q | Colour relations: every group of equal lines gets its own colour, and every group of parallel lines gets matching ∥ marks in its colour |
 | F | Zoom to fit |
 | Del | Delete |
@@ -53,6 +55,8 @@ Snapping: while drawing, the pointer snaps to points (coincident), the middle of
 The right panel works on several lines at once: tick construction or track, or pick a colour for all of them (Auto keeps blue for free, black for defined). With nothing selected it sets how new lines are drawn. It also lists the constraints on the selection, each with its own × to delete it. Equal, parallel and perpendicular show their icon on both lines.
 
 Where several lines meet, each brings its own end point: one click on the corner selects the whole stack of joined points, and dragging it snaps like a single point. In Motion and Animation the sketch lines are drawn over each body's bar, and lines outside any body stay faint.
+
+Text labels: drag them with Select, and set their text, size and colour in the right panel. Group a free label into a body with G (select it with part of the body) and it moves with that body in Motion and Animation; a label that names a point follows that point's body. Labels in no body stay where they are. They are copied, pasted and saved with the sketch.
 
 Line colour shows status: blue is still free to move, black is fully defined.
 

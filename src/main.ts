@@ -8,6 +8,7 @@ import { mountToolbar, switchMode } from "./ui/toolbar";
 import { mountKeys } from "./ui/keys";
 import { mountFeatureTree, mountProperties } from "./ui/panels";
 import { mountDimEditor } from "./ui/dimEditor";
+import { mountLabelEditor } from "./ui/labelEditor";
 import { mountWarning } from "./ui/warning";
 import { SliderMotion } from "./ui/sliderMotion";
 import { mountTimeline } from "./ui/timeline";
@@ -30,6 +31,7 @@ async function main() {
   mountFeatureTree($("#left"), ed);
   mountProperties($("#right"), ed, new SliderMotion(ed));
   mountDimEditor($("#canvas-wrap"), ed);
+  mountLabelEditor($("#canvas-wrap"), ed);
   mountWarning($("#warning"), ed);
   mountTimeline($("#timeline"), ed);
   mountKeys(ed);

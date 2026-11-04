@@ -23,9 +23,10 @@ export function split(doc: SketchDoc, sel: Id[]) {
  * points that belong to selected geometry.
  */
 export function fitSelection(def: ConstraintType, doc: SketchDoc, sel: Id[]): ReturnType<ConstraintType["fromSelection"]> {
-  // A whole stack of joined points counts as one point.
+  // Labels never take constraints; a whole stack of joined points counts as one point.
   const seen = new Set<Id>();
   sel = sel.filter((id) => {
+    if (doc.labels?.[id]) return false;
     if (!(id in doc.points)) return true;
     if (seen.has(id)) return false;
     stackOf(doc, id).forEach((p) => seen.add(p));

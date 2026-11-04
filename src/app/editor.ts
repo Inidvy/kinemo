@@ -1,5 +1,5 @@
 import { History } from "../core/history";
-import { cloneDoc, emptyDoc, type Id, type SketchDoc } from "../core/model";
+import { cloneDoc, emptyDoc, type Id, type SketchDoc, type Vec } from "../core/model";
 import { Mechanism, type MotionDrag } from "../motion/kinematics";
 import { degenerate, Solver, type DragTarget } from "../solver/solver";
 import { View } from "../render/view";
@@ -53,6 +53,8 @@ export class Editor {
   message = "";
   /** Set by the UI: open the value editor for a dimension. */
   onEditDimension?: (cid: Id) => void;
+  /** Open the text box for a label: an existing one, or a new one at a sketch position (naming `point` if given). */
+  onEditLabel?: (target: { id: Id } | { at: Vec; point?: Id }) => void;
   analysis: Analysis = emptyAnalysis();
   /** Constraints added or edited by the latest change: the suspects when the sketch becomes over-constrained. */
   recent = new Set<Id>();

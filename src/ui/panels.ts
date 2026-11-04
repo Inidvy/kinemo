@@ -1,5 +1,7 @@
 import type { Editor } from "../app/editor";
-import { arcRadius, type Geometry, type Id } from "../core/model";
+import { arcRadius, deleteItems, type Geometry, type Id } from "../core/model";
+import { LABEL_SIZE, labelBody, labelsOf } from "../core/labels";
+import { ownerMap } from "../motion/bodies";
 import { dist } from "../core/geom";
 import { constraintTypes } from "../constraints";
 import { fitSelection, stackOf } from "../constraints/select";
@@ -72,6 +74,7 @@ export function mountFeatureTree(el: HTMLElement, ed: Editor): void {
         <div class="feature-head"><span class="sketch-icon">${icons.sketch}</span>${t("panel.sketch")}${status}</div>
         <details open><summary>${t("panel.geometry")} <span class="count">${Object.keys(ed.doc.geoms).length}</span></summary>${geoms}</details>
         <details open><summary>${t("panel.constraints")} <span class="count">${Object.keys(ed.doc.constraints).length}</span></summary>${cons}</details>
+        ${labelsOf(ed.doc).length ? `<details open><summary>${t("panel.labels")} <span class="count">${labelsOf(ed.doc).length}</span></summary>${labelsOf(ed.doc).map((l) => row(l.id, l.text, "kind-label")).join("")}</details>` : ""}
         ${bodiesSection(ed)}
       </div>`;
   };
@@ -93,8 +96,25 @@ export function mountProperties(el: HTMLElement, ed: Editor, sliders: SliderMoti
       // "" is Auto: back to blue/black for free/defined.
       const color = line.dataset.lineColor || undefined;
       const ids = [...ed.selection].filter((id) => id in ed.doc.geoms);
-      if (ids.length) ed.change((doc) => ids.forEach((id) => (color ? (doc.geoms[id].color = color) : delete doc.geoms[id].color)));
+      const labels = [...ed.selection].filter((id) => id in (ed.doc.labels ?? {}));
+      if (ids.length || labels.length)
+        ed.change((doc) => {
+          ids.forEach((id) => (color ? (doc.geoms[id].color = color) : delete doc.geoms[id].color));
+          labels.forEach((id) => (color ? (doc.labels[id].color = color) : delete doc.labels[id].color));
+        });
       else ed.live((doc) => (doc.settings.pen = { ...doc.settings.pen, color }));
+      return;
+    }
+    const detach = (e.target as HTMLElement).closest<HTMLElement>("[data-label-detach]");
+    if (detach) {
+      // Keep it where it is, as a free label.
+      const id = detach.dataset.labelDetach!;
+      ed.change((doc) => {
+        const l = doc.labels[id];
+        const p = l.point ? doc.points[l.point] : undefined;
+        if (p) Object.assign(l, { x: p.x + l.x, y: p.y + l.y });
+        delete l.point;
+      });
       return;
     }
     const remove = (e.target as HTMLElement).closest<HTMLElement>("[data-remove]");
@@ -127,6 +147,12 @@ export function mountProperties(el: HTMLElement, ed: Editor, sliders: SliderMoti
       ed.change((doc) => ids.forEach((g) => (doc.geoms[g][field] = input.checked)));
     } else if (field === "penConstruction") {
       ed.live((doc) => (doc.settings.pen = { ...doc.settings.pen, construction: input.checked }));
+    } else if (field === "labelText") {
+      const text = input.value.trim();
+      ed.change((doc) => (text ? (doc.labels[id].text = text) : deleteItems(doc, [id])));
+    } else if (field === "labelSize") {
+      const v = parseFloat(input.value);
+      if (Number.isFinite(v) && v >= 6 && v <= 200) ed.change((doc) => (v === LABEL_SIZE ? delete doc.labels[id].size : (doc.labels[id].size = v)));
     } else if (field === "bodyName") {
       const name = input.value.trim();
       if (name) ed.change((doc) => (doc.bodies[id].name = name));
@@ -217,6 +243,16 @@ export function mountProperties(el: HTMLElement, ed: Editor, sliders: SliderMoti
       html += `<button class="btn danger" data-delete="1">${t("panel.delete")}</button>`;
     } else if (sel.length === 1 && doc.bodies[sel[0]]) {
       html += bodyProps(ed, doc.bodies[sel[0]]);
+    } else if (sel.length === 1 && doc.labels?.[sel[0]]) {
+      const l = doc.labels[sel[0]];
+      const body = labelBody(ownerMap(doc), l);
+      html += `<div class="prop-head">${t("panel.label")}</div>
+        <label class="field">${t("panel.labelText")}<input type="text" data-field="labelText" data-id="${l.id}" value="${esc(l.text)}"></label>
+        <label class="field">${t("panel.labelSize")}<input type="number" min="6" max="200" step="1" data-field="labelSize" data-id="${l.id}" value="${l.size ?? LABEL_SIZE}"></label>
+        ${colorField(l.color)}
+        <div class="readout"><span>${t("panel.labelBody")}</span><b>${body ? esc(doc.bodies[body].name) : t("panel.labelFree")}</b></div>`;
+      if (l.point) html += `<div class="readout"><span>${t("panel.labelNames")}</span><b>${t("geom.point")}</b></div><button class="btn" data-label-detach="${l.id}">${t("panel.labelDetach")}</button>`;
+      html += `<button class="btn danger" data-delete="1">${t("panel.delete")}</button>`;
     } else if (sel.length === 1 && doc.geoms[sel[0]]) {
       const g = doc.geoms[sel[0]];
       html += `<div class="prop-head">${t(`geom.${g.kind}`)}</div>`;

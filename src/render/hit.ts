@@ -2,6 +2,8 @@ import { arcRadius, type Id, type SketchDoc, type Vec } from "../core/model";
 import { angleInSweep, angleOf, dist, distToSegment } from "../core/geom";
 import type { View } from "./view";
 import { ICON, layoutDims, layoutIcons } from "./layout";
+import { labelHit, layoutLabels } from "./labels";
+import { labelAt } from "../core/labels";
 
 export type Hit =
   | { kind: "point"; id: Id }
@@ -9,7 +11,8 @@ export type Hit =
   | { kind: "constraint"; id: Id }
   | { kind: "dimension"; id: Id }
   | { kind: "body"; id: Id }
-  | { kind: "joint"; id: Id };
+  | { kind: "joint"; id: Id }
+  | { kind: "label"; id: Id };
 
 export interface HitOptions {
   icons: boolean;
@@ -31,6 +34,10 @@ export function hitTest(doc: SketchDoc, view: View, s: Vec, opts: HitOptions): H
       for (const b of layoutIcons(doc, view).reverse()) {
         if (s.x >= b.x && s.x <= b.x + ICON && s.y >= b.y && s.y <= b.y + ICON) return { kind: "constraint", id: b.cid };
       }
+    }
+    if (doc.settings.showLabels !== false) {
+      const id = labelHit(layoutLabels(doc, view, (l) => labelAt(doc, l)), s);
+      if (id) return { kind: "label", id };
     }
     for (const d of layoutDims(doc, view).reverse()) {
       const t = view.toScreen(d.text);
@@ -90,6 +97,12 @@ export function boxSelect(doc: SketchDoc, view: View, a: Vec, b: Vec): Id[] {
   for (const g of Object.values(doc.geoms)) {
     const pts = g.kind === "line" ? [g.p1, g.p2] : g.kind === "arc" ? [g.s, g.e, g.c] : [g.c];
     if (pts.every(inside)) out.push(g.id);
+  }
+  if (doc.settings.showLabels !== false) {
+    for (const l of Object.values(doc.labels ?? {})) {
+      const p = view.toScreen(labelAt(doc, l));
+      if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1) out.push(l.id);
+    }
   }
   return out;
 }

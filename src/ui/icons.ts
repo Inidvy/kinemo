@@ -24,6 +24,10 @@ const paths = {
     "M8.5 6.5l2-2",
     "M17.5 15.5l2-2",
   ],
+  // A letter T: text labels.
+  text: ["M5 5h14", "M12 5v14", "M9 19h6"],
+  // Labels shown (a tag with a T).
+  labels: ["M4 6h10l5 6-5 6H4z", "M7 9h5", "M9.5 9v6"],
   // A tape measure.
   measure: [circ(10, 12, 7), circ(10, 12, 2), "M17 19h4", "M10 19h7"],
   // Two equal bars and two parallel ones: shows relations in colour.
