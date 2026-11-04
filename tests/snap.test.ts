@@ -121,3 +121,26 @@ describe("stacked points", () => {
     expect(fitSelection(constraintTypes.get("midpoint"), doc, [a1, b1, c, l2])).toEqual([{ type: "midpoint", refs: [a1, l2] }]);
   });
 });
+
+import { relationGroups } from "../src/render/relations";
+
+describe("relation colours", () => {
+  it("gives each transitive equal group one colour", () => {
+    const doc = emptyDoc();
+    const ids = ["a", "b", "c", "d", "e"];
+    ids.forEach((id, i) => {
+      doc.points[`${id}1`] = { id: `${id}1`, x: i, y: 0 };
+      doc.points[`${id}2`] = { id: `${id}2`, x: i, y: 1 };
+      doc.geoms[id] = { id, kind: "line", p1: `${id}1`, p2: `${id}2` };
+    });
+    doc.constraints.c1 = { id: "c1", type: "equal", refs: ["a", "b"] };
+    doc.constraints.c2 = { id: "c2", type: "equal", refs: ["c", "b"] };
+    doc.constraints.c3 = { id: "c3", type: "equal", refs: ["d", "e"] };
+    const g = relationGroups(doc, "equal");
+    expect(g.get("a")).toBe(g.get("b"));
+    expect(g.get("c")).toBe(g.get("a"));
+    expect(g.get("d")).toBe(g.get("e"));
+    expect(g.get("d")).not.toBe(g.get("a"));
+    expect(relationGroups(doc, "parallel").size).toBe(0);
+  });
+});

@@ -33,6 +33,7 @@ Pushing to `main` deploys to GitHub Pages (Settings → Pages → Source: GitHub
 | X | Toggle construction on the selected lines; with nothing selected, switch whether new lines are drawn as construction |
 | K | Tag as track |
 | I | Show or hide constraint icons |
+| Q | Colour relations: every group of equal lines gets its own colour, and every group of parallel lines gets matching ∥ marks in its colour |
 | F | Zoom to fit |
 | Del | Delete |
 | Ctrl+A | Select all (Sketch: every line, arc, circle and loose point; Motion: every body) |

@@ -180,6 +180,17 @@ const builtins: Action[] = [
     active: (ed) => ed.doc.settings.showConstraintIcons,
   },
   {
+    id: "relations",
+    label: "action.relations",
+    icon: icons.relations,
+    shortcut: "q",
+    shift: false,
+    group: "view",
+    modes: SKETCH,
+    run: (ed) => ed.live((doc) => (doc.settings.showRelations = !doc.settings.showRelations)),
+    active: (ed) => !!ed.doc.settings.showRelations,
+  },
+  {
     id: "fit",
     label: "action.fit",
     icon: icons.fit,

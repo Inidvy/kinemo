@@ -34,6 +34,7 @@ export const en: Record<string, string> = {
   "clip.empty": "Nothing copied yet: select something and press Ctrl+C.",
   "action.redo": "Redo",
   "action.icons": "Show constraint icons",
+  "action.relations": "Colour equal and parallel groups",
   "action.fit": "Zoom to fit",
   "action.new": "New",
   "action.open": "Open…",
