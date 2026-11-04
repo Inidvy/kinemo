@@ -1,4 +1,5 @@
-import { addConstraint, addPoint, type Id, type SketchDoc, type Vec } from "../core/model";
+import { addConstraintSmart } from "../constraints/select";
+import { addPoint, type Id, type SketchDoc, type Vec } from "../core/model";
 import { snapConstraint } from "./snap";
 import type { Snap } from "./types";
 
@@ -9,7 +10,7 @@ import type { Snap } from "./types";
 export function placePoint(doc: SketchDoc, snap: Snap): Id {
   const p = addPoint(doc, snap.at.x, snap.at.y);
   const c = snapConstraint(doc, p, snap);
-  if (c) addConstraint(doc, c);
+  if (c) addConstraintSmart(doc, c);
   return p;
 }
 

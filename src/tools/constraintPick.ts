@@ -49,7 +49,9 @@ export const constraintPickTool: Tool = {
   down(ed, e) {
     if (!pending) return;
     const h = e.hit;
-    if (!h || (h.kind !== "point" && h.kind !== "geom")) return;
+    // Clicking empty space lets go of what was picked so far.
+    if (!h) return ed.select([]);
+    if (h.kind !== "point" && h.kind !== "geom") return;
     ed.select([h.id], true);
     const sel = [...ed.selection];
     if (typeof fitSelection(constraintTypes.get(pending), ed.doc, sel) === "string") return;

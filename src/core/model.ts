@@ -19,6 +19,8 @@ interface GeomBase {
   construction?: boolean;
   /** Track geometry: a path a slider may run along (used in Motion mode). */
   track?: boolean;
+  /** Colour the user gave it in the sketch (CSS colour); unset follows free/defined. */
+  color?: string;
 }
 
 export interface Line extends GeomBase {
@@ -65,6 +67,13 @@ export interface Settings {
   solidBars: boolean;
   /** Draw each joint's letter beside it in Motion mode (default on). */
   jointLetters?: boolean;
+  /** How new lines, arcs and circles are drawn: as construction, and in which colour. */
+  pen?: Pen;
+}
+
+export interface Pen {
+  construction?: boolean;
+  color?: string;
 }
 
 /** A rigid group of sketch geometry. In Motion mode it moves as one bar. */

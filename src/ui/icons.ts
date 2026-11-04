@@ -72,7 +72,8 @@ const paths = {
 /** Constraint icons by constraint type id. Types without one fall back to their glyph. */
 export const constraintIconPaths: Record<string, IconPaths> = {
   coincident: ["M3 21l6.5-6.5", "M14.5 9.5L21 3", circ(12, 12, 3)],
-  onCurve: ["M3 20Q12 0 21 20", circ(12, 10, 3)],
+  // Same symbol as coincident: on the canvas a point on a line is what pressing B (coincident) makes.
+  onCurve: ["M3 21l6.5-6.5", "M14.5 9.5L21 3", circ(12, 12, 3)],
   horizontal: [circ(4, 12, 2), circ(20, 12, 2), "M6 12h12"],
   vertical: [circ(12, 4, 2), circ(12, 20, 2), "M12 6v12"],
   parallel: ["M3 20L13 4", "M11 20L21 4"],
@@ -80,11 +81,13 @@ export const constraintIconPaths: Record<string, IconPaths> = {
   tangent: [circ(12, 14, 7), "M3 7h18"],
   equal: ["M5 9h14", "M5 15h14"],
   concentric: [circ(12, 12, 9), circ(12, 12, 4), dot(12, 12)],
-  midpoint: ["M3 18l6.5-4.33", "M14.5 10.33L21 6", circ(12, 12, 3)],
+  midpoint: ["M3 12h6", "M15 12h6", "M3 8v8", "M21 8v8", circ(12, 12, 3)],
   symmetric: ["M12 3v3", "M12 10v4", "M12 18v3", circ(5, 12, 2), circ(19, 12, 2)],
   fix: ["M4 9h16", "M7 9l-3 5", "M11 9l-3 5", "M15 9l-3 5", "M19 9l-3 5"],
   groundPoint: [circ(12, 7, 3), "M12 10v5", "M4 15h16", "M7 15l-2 4", "M11 15l-2 4", "M15 15l-2 4", "M19 15l-2 4"],
-  distance: ["M3 5v14", "M21 5v14", "M3 12h18", "M7 8l-4 4 4 4", "M17 8l4 4-4 4"],
+  distance: ["M5 19L19 5", "M5 13v6h6", "M19 11V5h-6"],
+  distanceX: ["M3 5v14", "M21 5v14", "M3 12h18", "M7 8l-4 4 4 4", "M17 8l4 4-4 4"],
+  distanceY: ["M5 3h14", "M5 21h14", "M12 3v18", "M8 7l4-4 4 4", "M8 17l4 4 4-4"],
   angle: ["M3 20h18", "M3 20L16 5", "M12 20a9 9 0 0 0-3.1-6.8"],
   diameter: [circ(12, 12, 8), "M4 20L20 4"],
   radius: [circ(12, 12, 9), "M12 12l6.4-6.4", dot(12, 12)],

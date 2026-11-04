@@ -4,6 +4,8 @@ import { hitTest } from "../render/hit";
 import type { View } from "../render/view";
 import { colors } from "../render/style";
 import { t } from "../i18n";
+import { constraintTypes } from "../constraints";
+import { drawConstraintIcon } from "../ui/icons";
 import type { Snap } from "./types";
 
 /** How close (screen px) the cursor must come to a line's middle to snap to it. */
@@ -77,7 +79,7 @@ export function snapConstraint(doc: SketchDoc, p: Id, snap: Snap): { type: strin
   return c;
 }
 
-const SNAP_LABEL: Record<Exclude<Snap["kind"], "none">, string> = { point: "c.coincident", midpoint: "c.midpoint", curve: "c.onCurve" };
+const SNAP_TYPE: Record<Exclude<Snap["kind"], "none">, string> = { point: "coincident", midpoint: "midpoint", curve: "onCurve" };
 
 /** Mark the snap target on the canvas and name the constraint it will make. */
 export function drawSnap(ctx: CanvasRenderingContext2D, view: View, snap: Snap | null): void {
@@ -100,7 +102,10 @@ export function drawSnap(ctx: CanvasRenderingContext2D, view: View, snap: Snap |
     ctx.arc(s.x, s.y, snap.kind === "point" ? 7 : 5, 0, Math.PI * 2);
   }
   ctx.stroke();
+  // The constraint's own icon (as on the toolbar) and its name.
+  const type = SNAP_TYPE[snap.kind];
+  drawConstraintIcon(ctx, type, s.x + 9, s.y - 22, 14);
   ctx.font = "11px system-ui, sans-serif";
-  ctx.fillText(t(SNAP_LABEL[snap.kind]), s.x + 10, s.y - 8);
+  ctx.fillText(t(constraintTypes.get(type).label), s.x + 27, s.y - 11);
   ctx.restore();
 }

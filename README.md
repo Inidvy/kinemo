@@ -25,11 +25,11 @@ Pushing to `main` deploys to GitHub Pages (Settings → Pages → Source: GitHub
 | C | Circle |
 | O | Point |
 | R / Shift+R | Rectangle by two corners / by centre and corner |
-| D | Dimension: click geometry (or select it first), a preview follows the cursor, click where the label goes, type a value. Click an existing dimension to change its value |
+| D | Dimension: click geometry (or select it first), a preview follows the cursor, click where the label goes, type a value. For a line or two points the label's place picks the kind: beside the line gives its length, above or below gives the horizontal distance, left or right the vertical one. Click an existing dimension to change its value |
 | B | Coincident (two points), or point on curve (points and one line, circle or arc) |
 | H V P T | Horizontal, vertical, parallel, tangent |
 | N E U Z Y W | Perpendicular, equal, midpoint, concentric, symmetric, fix (sketch only: holds points or lines in place, ignored in Motion mode) |
-| X | Toggle construction |
+| X | Toggle construction on the selected lines; with nothing selected, switch whether new lines are drawn as construction |
 | K | Tag as track |
 | I | Show or hide constraint icons |
 | F | Zoom to fit |
@@ -46,7 +46,9 @@ Pushing to `main` deploys to GitHub Pages (Settings → Pages → Source: GitHub
 
 Constraint keys work both ways: select items first and press the key, or press the key first and then click the items (it stays active for the next ones until Esc). A box selection or Ctrl+A also catches the end points of lines; constraints that only want the lines ignore them. The right panel lists the constraints that fit the current selection, and every toolbar button shows its key. Middle- or right-drag pans, the wheel zooms, and two fingers pan and pinch on touch screens.
 
-Snapping: while drawing, the pointer snaps to points (coincident), the middle of a line (midpoint, shown with a diamond) and lines, arcs and circles (point on curve), and the canvas names the constraint it will add. Dragging a single point with Select snaps the same way, and dropping it adds that constraint in the same undo step; hold Ctrl while dragging to move it without snapping.
+Snapping: while drawing, the pointer snaps to points (coincident), the middle of a line (midpoint, shown with a diamond) and lines, arcs and circles (point on curve), and the canvas names the constraint it will add. Dragging a single point with Select snaps the same way, and dropping it adds that constraint in the same undo step; hold Ctrl while dragging to move it without snapping. Pressing U (midpoint) on a point that already sits on the line replaces that point-on-line constraint instead of clashing with it.
+
+The right panel works on several lines at once: tick construction or track, or pick a colour for all of them (Auto keeps blue for free, black for defined). With nothing selected it sets how new lines are drawn. It also lists the constraints on the selection, each with its own × to delete it. Equal, parallel and perpendicular show their icon on both lines.
 
 Line colour shows status: blue is still free to move, black is fully defined.
 

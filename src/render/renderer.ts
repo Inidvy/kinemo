@@ -144,6 +144,7 @@ function drawGrid(ctx: CanvasRenderingContext2D, v: View, w: number, h: number) 
 
 function geomColor(ed: Editor, g: Geometry, bad: string | null): string {
   if (bad) return bad;
+  if (g.color) return g.color;
   if (g.track) return colors.track;
   const free = geomPoints(g).some((p) => ed.analysis.free.has(p)) || ed.analysis.freeRadii.has(g.id);
   return free ? colors.free : colors.defined;
@@ -213,9 +214,16 @@ export function drawDimension(
   const sh = d.shape;
 
   if (sh.kind === "linear") {
-    const off = linearOffset(sh, d.text);
-    const n = perp(norm(sub(sh.b, sh.a)));
-    const a2 = add(sh.a, scale(n, off)), b2 = add(sh.b, scale(n, off));
+    // Where the dimension line's ends sit: level with the label for a horizontal
+    // or vertical distance, otherwise offset alongside the measured segment.
+    let a2: Vec, b2: Vec;
+    if (sh.axis === "x") [a2, b2] = [{ x: sh.a.x, y: d.text.y }, { x: sh.b.x, y: d.text.y }];
+    else if (sh.axis === "y") [a2, b2] = [{ x: d.text.x, y: sh.a.y }, { x: d.text.x, y: sh.b.y }];
+    else {
+      const off = linearOffset(sh, d.text);
+      const n = perp(norm(sub(sh.b, sh.a)));
+      [a2, b2] = [add(sh.a, scale(n, off)), add(sh.b, scale(n, off))];
+    }
     const [sa, sb, sa2, sb2] = [sh.a, sh.b, a2, b2].map((p) => v.toScreen(p));
     const ext = scale(norm(sub(sa2, sa)), 4);
     ctx.beginPath();

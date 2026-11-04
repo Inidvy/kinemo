@@ -6,6 +6,9 @@ import { dot, perp, sub } from "../../core/geom";
 const anchorFirst = (doc: Parameters<NonNullable<ConstraintType["anchor"]>>[0], c: Constraint) =>
   geomAnchor(doc, c.refs[0]);
 
+/** One icon on each of the items, so neither reads as the one that was picked first. */
+const anchorEach = (doc: SketchDoc, c: Constraint) => c.refs.map((id) => geomAnchor(doc, id));
+
 /** Pairwise chain: [a,b,c] -> (a,b),(b,c). */
 function chain(type: string, ids: string[]) {
   return ids.slice(1).map((id, i) => ({ type, refs: [ids[i], id] }));
@@ -23,6 +26,7 @@ export const parallel: ConstraintType = {
   },
   toPrimitives: (_d, c) => [{ id: `${c.id}#0`, type: "parallel", l1_id: c.refs[0], l2_id: c.refs[1] }],
   anchor: anchorFirst,
+  anchors: anchorEach,
 };
 
 export const perpendicular: ConstraintType = {
@@ -39,6 +43,7 @@ export const perpendicular: ConstraintType = {
     { id: `${c.id}#0`, type: "perpendicular_ll", l1_id: c.refs[0], l2_id: c.refs[1] },
   ],
   anchor: anchorFirst,
+  anchors: anchorEach,
 };
 
 /** Direction of a curve at one of its points (lines p1→p2, arcs counter-clockwise). */
@@ -133,6 +138,7 @@ export const equal: ConstraintType = {
     return [{ id, type: "equal_radius_ca", c1_id: circle.id, a2_id: arc.id }];
   },
   anchor: anchorFirst,
+  anchors: anchorEach,
 };
 
 export const concentric: ConstraintType = {

@@ -54,6 +54,46 @@ export const distance: ConstraintType = {
   },
 };
 
+/**
+ * Horizontal or vertical distance between two points, or across a line.
+ * Keeps which way round the points are (`sign`), so the solver doesn't flip them.
+ */
+function axisDistance(axis: "x" | "y"): ConstraintType {
+  const id = axis === "x" ? "distanceX" : "distanceY";
+  const ends = (doc: SketchDoc, c: Constraint): [Vec, Vec] => linearEnds(doc, c);
+  return {
+    id,
+    label: `c.${id}`,
+    glyph: axis === "x" ? "↔" : "↕",
+    dimension: true,
+    unit: "mm",
+    fromSelection(doc, sel) {
+      const { points, lines, geoms } = split(doc, sel);
+      let refs: string[] | null = null;
+      if (points.length === 2 && geoms.length === 0) refs = points;
+      else if (points.length === 0 && lines.length === 1 && geoms.length === 1) refs = [lines[0].id];
+      if (!refs) return "hint.selectDistanceAxis";
+      const [a, b] = ends(doc, { id: "", type: id, refs });
+      const d = b[axis] - a[axis];
+      return [{ type: id, refs, value: round(Math.abs(d)), data: { sign: d < 0 ? -1 : 1 } }];
+    },
+    toPrimitives(doc, c) {
+      const [p1, p2] = c.refs.length === 1 ? [(doc.geoms[c.refs[0]] as Line).p1, (doc.geoms[c.refs[0]] as Line).p2] : c.refs;
+      // planegcs: param2 - param1 = difference.
+      return [
+        { id: `${c.id}#0`, type: "difference", param1: { o_id: p1, prop: axis }, param2: { o_id: p2, prop: axis }, difference: (c.data?.sign ?? 1) * (c.value ?? 0) },
+      ];
+    },
+    shape(doc, c): DimensionShape {
+      const [a, b] = ends(doc, c);
+      return { kind: "linear", a, b, axis };
+    },
+  };
+}
+
+export const distanceX = axisDistance("x");
+export const distanceY = axisDistance("y");
+
 function intersection(doc: SketchDoc, l1: Line, l2: Line): Vec {
   const a = P(doc, l1.p1), b = P(doc, l1.p2), c = P(doc, l2.p1), d = P(doc, l2.p2);
   const den = (a.x - b.x) * (c.y - d.y) - (a.y - b.y) * (c.x - d.x);

@@ -17,13 +17,42 @@ let cursor: Vec | null = null;
 
 const geometryOnly = (doc: SketchDoc, ids: Iterable<Id>) => [...ids].filter((id) => id in doc.points || id in doc.geoms);
 
-/** The dimension the picked items would get, or null if they don't make one. */
-function dimensionFor(doc: SketchDoc, sel: Id[]): { def: ConstraintType; c: Omit<Constraint, "id"> } | null {
+/**
+ * A distance between two points (or a line's ends) measures along the line
+ * when the label sits beside it, the horizontal part when the label is above
+ * or below the points, and the vertical part when it is to their left or right.
+ */
+function distanceKind(doc: SketchDoc, c: Omit<Constraint, "id">, at: Vec | null): string {
+  if (!at || c.refs.some((id) => doc.geoms[id] && c.refs.length > 1)) return "distance";
+  const shape = constraintTypes.get("distance").shape!(doc, { ...c, id: "" });
+  if (shape.kind !== "linear") return "distance";
+  const { a, b } = shape;
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  const flat = (d: number) => Math.abs(d) < len * 0.02;
+  const besideX = at.x < Math.min(a.x, b.x) || at.x > Math.max(a.x, b.x);
+  const besideY = at.y < Math.min(a.y, b.y) || at.y > Math.max(a.y, b.y);
+  // A line that already lies flat measures its length whichever side the label is on.
+  if (besideY && !besideX && !flat(b.y - a.y)) return "distanceX";
+  if (besideX && !besideY && !flat(b.x - a.x)) return "distanceY";
+  return "distance";
+}
+
+/** The dimension the picked items would get, or null if they don't make one. `at` is where its label would go. */
+function dimensionFor(doc: SketchDoc, sel: Id[], at: Vec | null = null): { def: ConstraintType; c: Omit<Constraint, "id"> } | null {
   if (!sel.length) return null;
   for (const type of ORDER) {
-    const def = constraintTypes.get(type);
-    const out = fitSelection(def, doc, sel);
-    if (typeof out !== "string" && def.shape) return { def, c: out[0] };
+    let def = constraintTypes.get(type);
+    let out = fitSelection(def, doc, sel);
+    if (typeof out === "string" || !def.shape) continue;
+    if (type === "distance") {
+      const kind = distanceKind(doc, out[0], at);
+      if (kind !== "distance") {
+        def = constraintTypes.get(kind);
+        out = fitSelection(def, doc, sel);
+        if (typeof out === "string") continue;
+      }
+    }
+    return { def, c: out[0] };
   }
   return null;
 }
@@ -80,7 +109,7 @@ export const dimensionTool: Tool = {
       return;
     }
     if (ed.selection.size === 0) return;
-    const found = dimensionFor(ed.doc, geometryOnly(ed.doc, ed.selection));
+    const found = dimensionFor(ed.doc, geometryOnly(ed.doc, ed.selection), e.world);
     if (!found) {
       ed.flash(t("hint.selectDistance"));
       ed.select([]);
@@ -100,7 +129,8 @@ export const dimensionTool: Tool = {
   overlay({ ctx, ed }) {
     if (!cursor) return;
     const items = previewItems(ed.doc, ed.selection, ed.hover);
-    const found = dimensionFor(ed.doc, items);
+    // Over an item the label goes to its usual spot, so the cursor doesn't pick the direction.
+    const found = dimensionFor(ed.doc, items, ed.hover ? null : cursor);
     if (!found) return;
     const c = { ...found.c, id: "preview" } as Constraint;
     const shape = found.def.shape!(ed.doc, c);

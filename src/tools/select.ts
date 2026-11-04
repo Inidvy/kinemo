@@ -1,4 +1,5 @@
-import { addConstraint, geomPoints, type Id, type SketchDoc, type Vec } from "../core/model";
+import { addConstraintSmart } from "../constraints/select";
+import { geomPoints, type Id, type SketchDoc, type Vec } from "../core/model";
 import { dist, sub } from "../core/geom";
 import { boxSelect } from "../render/hit";
 import { colors } from "../render/style";
@@ -120,7 +121,7 @@ export const selectTool: Tool = {
       const p = ed.doc.points[id];
       const c = p && dist(p, snap.at) < ed.view.px(4) ? snapConstraint(ed.doc, id, snap) : null;
       ed.snap = null;
-      ed.endDrag(c ? (doc) => addConstraint(doc, c) : undefined);
+      ed.endDrag(c ? (doc) => addConstraintSmart(doc, c) : undefined);
     } else if (drag) {
       ed.endDrag();
     }

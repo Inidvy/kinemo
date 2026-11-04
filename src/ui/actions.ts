@@ -32,6 +32,12 @@ export const actions = new Registry<Action>("actions");
 
 function toggleFlag(ed: Editor, flag: "construction" | "track") {
   const ids = [...ed.selection].filter((id) => id in ed.doc.geoms);
+  if (!ids.length && flag === "construction") {
+    // With nothing selected, X switches what new lines are drawn as.
+    const on = !ed.doc.settings.pen?.construction;
+    ed.live((doc) => (doc.settings.pen = { ...doc.settings.pen, construction: on }));
+    return ed.flash(t(on ? "pen.constructionOn" : "pen.constructionOff"));
+  }
   if (!ids.length) return;
   const on = !ids.every((id) => ed.doc.geoms[id][flag]);
   ed.change((doc) => ids.forEach((id) => (doc.geoms[id][flag] = on)));
@@ -105,7 +111,20 @@ function paste(ed: Editor): void {
 const MOTION: Mode[] = ["motion"];
 
 const builtins: Action[] = [
-  { id: "construction", label: "action.construction", icon: icons.construction, shortcut: "x", group: "edit", modes: SKETCH, run: (ed) => toggleFlag(ed, "construction") },
+  {
+    id: "construction",
+    label: "action.construction",
+    icon: icons.construction,
+    shortcut: "x",
+    group: "edit",
+    modes: SKETCH,
+    run: (ed) => toggleFlag(ed, "construction"),
+    // Pressed while new lines are drawn as construction, or when every selected line is one.
+    active(ed) {
+      const ids = [...ed.selection].filter((id) => id in ed.doc.geoms);
+      return ids.length ? ids.every((id) => ed.doc.geoms[id].construction) : !!ed.doc.settings.pen?.construction;
+    },
+  },
   { id: "track", label: "action.track", icon: icons.track, shortcut: "k", group: "edit", modes: SKETCH, run: (ed) => toggleFlag(ed, "track") },
   {
     id: "delete",

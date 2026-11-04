@@ -1,4 +1,4 @@
-import { arcRadius, geomPoints, type Arc, type Circle, type Geometry, type Id, type Line, type SketchDoc, type Vec } from "../core/model";
+import { addConstraint, arcRadius, geomPoints, type Arc, type Constraint, type Circle, type Geometry, type Id, type Line, type SketchDoc, type Vec } from "../core/model";
 import { angleOf, mid } from "../core/geom";
 import type { ConstraintType } from "./types";
 
@@ -30,6 +30,33 @@ export function fitSelection(def: ConstraintType, doc: SketchDoc, sel: Id[]): Re
   if (trimmed.length === sel.length || !trimmed.length) return out;
   const again = def.fromSelection(doc, trimmed);
   return typeof again === "string" ? out : again;
+}
+
+/** Points joined to `p` by coincident constraints, `p` included. */
+function joined(doc: SketchDoc, p: Id): Set<Id> {
+  const out = new Set([p]);
+  for (const c of Object.values(doc.constraints)) if (c.type === "coincident" && c.refs.includes(p)) c.refs.forEach((r) => out.add(r));
+  return out;
+}
+
+/**
+ * Add a constraint, upgrading what is already there: a midpoint replaces the
+ * "point on line" it makes redundant (so pressing U on a point that already
+ * sits on the line just works), and a "point on line" that a midpoint already
+ * covers isn't added again. Returns false when nothing was added.
+ */
+export function addConstraintSmart(doc: SketchDoc, c: Omit<Constraint, "id">): boolean {
+  const all = Object.values(doc.constraints);
+  if (c.type === "onCurve") {
+    const pts = joined(doc, c.refs[0]);
+    if (all.some((x) => x.type === "midpoint" && x.refs[1] === c.refs[1] && pts.has(x.refs[0]))) return false;
+  }
+  if (c.type === "midpoint") {
+    const pts = joined(doc, c.refs[0]);
+    for (const x of all) if (x.type === "onCurve" && x.refs[1] === c.refs[1] && pts.has(x.refs[0])) delete doc.constraints[x.id];
+  }
+  addConstraint(doc, c);
+  return true;
 }
 
 export const P = (doc: SketchDoc, id: Id): Vec => doc.points[id];

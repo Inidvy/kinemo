@@ -24,11 +24,13 @@ export function layoutIcons(doc: SketchDoc, view: View): IconBox[] {
   for (const c of Object.values(doc.constraints)) {
     const def = constraintTypes.find(c.type);
     if (!def?.anchor || def.dimension) continue;
-    const at = view.toScreen(def.anchor(doc, c));
-    const key = `${Math.round(at.x / 6)},${Math.round(at.y / 6)}`;
-    const g = groups.get(key) ?? { at, items: [] };
-    g.items.push(c);
-    groups.set(key, g);
+    for (const world of def.anchors?.(doc, c) ?? [def.anchor(doc, c)]) {
+      const at = view.toScreen(world);
+      const key = `${Math.round(at.x / 6)},${Math.round(at.y / 6)}`;
+      const g = groups.get(key) ?? { at, items: [] };
+      g.items.push(c);
+      groups.set(key, g);
+    }
   }
   const out: IconBox[] = [];
   for (const { at, items } of groups.values()) {
@@ -59,6 +61,9 @@ export function dimAnchor(shape: DimensionShape): Vec {
 export function defaultLabel(shape: DimensionShape, view: View): Vec {
   const d = view.px(28);
   if (shape.kind === "linear") {
+    // A horizontal distance goes above its points, a vertical one to their right.
+    if (shape.axis === "x") return { x: 0, y: Math.max(shape.a.y, shape.b.y) - mid(shape.a, shape.b).y + d };
+    if (shape.axis === "y") return { x: Math.max(shape.a.x, shape.b.x) - mid(shape.a, shape.b).x + d, y: 0 };
     const n = perp(norm(sub(shape.b, shape.a)));
     return { x: n.x * d, y: n.y * d };
   }
@@ -79,7 +84,11 @@ export const isWatched = (c: Constraint): boolean => !!c.data?.watch;
 
 /** What a dimension measures now, from its drawn shape (mm or degrees). */
 export function measured(shape: DimensionShape): number {
-  if (shape.kind === "linear") return Math.hypot(shape.b.x - shape.a.x, shape.b.y - shape.a.y);
+  if (shape.kind === "linear") {
+    if (shape.axis === "x") return Math.abs(shape.b.x - shape.a.x);
+    if (shape.axis === "y") return Math.abs(shape.b.y - shape.a.y);
+    return Math.hypot(shape.b.x - shape.a.x, shape.b.y - shape.a.y);
+  }
   if (shape.kind === "radial") return shape.diameter ? shape.r * 2 : shape.r;
   let sweep = shape.d2 - shape.d1;
   while (sweep <= -Math.PI) sweep += 2 * Math.PI;

@@ -4,8 +4,9 @@ import { Mechanism, type MotionDrag } from "../motion/kinematics";
 import { degenerate, Solver, type DragTarget } from "../solver/solver";
 import { View } from "../render/view";
 import { constraintTypes } from "../constraints";
-import { fitSelection } from "../constraints/select";
+import { addConstraintSmart, fitSelection } from "../constraints/select";
 import type { Snap } from "../tools/types";
+import { tools } from "../tools";
 import { t } from "../i18n";
 
 export interface Analysis {
@@ -144,6 +145,15 @@ export class Editor {
   change(mutate: (doc: SketchDoc) => void, before: SketchDoc = this.doc): void {
     const next = cloneDoc(this.doc);
     mutate(next);
+    // Geometry a drawing tool just made takes the pen's construction flag and colour.
+    const pen = next.settings.pen;
+    if (pen && tools.find(this.tool)?.snaps) {
+      for (const g of Object.values(next.geoms)) {
+        if (g.id in before.geoms) continue;
+        if (pen.construction) g.construction = true;
+        if (pen.color) g.color = pen.color;
+      }
+    }
     const touched = changedConstraints(before, next);
     if (touched.size) this.recent = touched;
     else for (const id of [...this.recent]) if (!(id in next.constraints)) this.recent.delete(id);
@@ -255,12 +265,7 @@ export class Editor {
       if (!quiet) this.flash(t(out));
       return false;
     }
-    this.change((doc) => {
-      for (const c of out) {
-        const id = `c${doc.nextId++}`;
-        doc.constraints[id] = { ...c, id };
-      }
-    });
+    this.change((doc) => out.forEach((c) => addConstraintSmart(doc, c)));
     return true;
   }
 
