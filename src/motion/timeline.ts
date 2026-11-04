@@ -142,3 +142,23 @@ export function shiftKeys(tl: Timeline, refs: KeyRef[], dt: number): KeyRef[] {
   }
   return moved.map((m) => ({ driver: m.driver, i: tl.keys[m.driver].indexOf(m.k) }));
 }
+
+/**
+ * Key one full turn for a slider that goes round: from `from` at the start
+ * to one turn further (`span`, negative to turn the other way) at the end,
+ * at a steady speed, and loop the clip so it keeps turning.
+ */
+export function spinKeys(tl: Timeline, driver: Id, from: number, span: number): void {
+  tl.keys[driver] = [
+    { t: 0, v: from, linear: true },
+    { t: tl.length, v: from + span },
+  ];
+  tl.mode = "loop";
+}
+
+/** Which way a slider's keys make one steady full turn: 1, -1, or 0 when they don't. */
+export function spinDirection(keys: Keyframe[] | undefined, span: number): number {
+  if (keys?.length !== 2 || !keys[0].linear) return 0;
+  const d = keys[1].v - keys[0].v;
+  return Math.abs(Math.abs(d) - Math.abs(span)) < 1e-6 ? Math.sign(d) : 0;
+}

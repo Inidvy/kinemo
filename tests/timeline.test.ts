@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { addConstraint, addGeom, addPoint, emptyDoc, type Line, type SketchDoc, type Timeline } from "../src/core/model";
-import { clipTime, deleteKeys, setKey, shiftKeys, valueAt } from "../src/motion/timeline";
+import { clipTime, deleteKeys, setKey, shiftKeys, valueAt, spinKeys, spinDirection } from "../src/motion/timeline";
 import { sweepPaths } from "../src/motion/paths";
 import { Mechanism } from "../src/motion/kinematics";
 import { addDriver } from "../src/motion/drivers";
@@ -115,5 +115,21 @@ describe("recording", () => {
     expect(keys[keys.length - 1].t).toBeCloseTo(3, 2);
     expect(keys.length).toBeLessThan(20);
     for (let i = 0; i <= 180; i += 7) expect(Math.abs(valueAt(keys, i / 60)! - 90 * Math.sin((Math.PI * i) / 180))).toBeLessThan(3);
+  });
+});
+
+describe("full turn", () => {
+  it("keys one steady turn over the clip and loops it", () => {
+    const tl: Timeline = { length: 4, mode: "once", keys: {} };
+    spinKeys(tl, "d1", 30, 360);
+    expect(tl.mode).toBe("loop");
+    expect(valueAt(tl.keys.d1, 0)).toBe(30);
+    expect(valueAt(tl.keys.d1, 2)).toBeCloseTo(210);
+    expect(valueAt(tl.keys.d1, 4)).toBe(390);
+    expect(spinDirection(tl.keys.d1, 360)).toBe(1);
+    spinKeys(tl, "d1", 30, -360);
+    expect(spinDirection(tl.keys.d1, 360)).toBe(-1);
+    setKey(tl, "d1", 1, 0);
+    expect(spinDirection(tl.keys.d1, 360)).toBe(0);
   });
 });
