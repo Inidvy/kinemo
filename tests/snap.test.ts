@@ -95,3 +95,16 @@ describe("horizontal and vertical distances", () => {
     expect(r.doc.points[a2].y - r.doc.points[a1].y).toBeCloseTo(10);
   });
 });
+
+describe("equal in a busy sketch", () => {
+  it("doesn't link lines that are already equal through others, in either order", () => {
+    const { doc, l1, l2 } = twoLines();
+    const a = addPoint(doc, 0, 50), b = addPoint(doc, 30, 50);
+    const l3 = addGeom<Line>(doc, { kind: "line", p1: a, p2: b });
+    addConstraint(doc, { type: "equal", refs: [l1, l3] });
+    addConstraint(doc, { type: "equal", refs: [l3, l2] });
+    const eq = constraintTypes.get("equal");
+    expect(eq.fromSelection(doc, [l1, l2])).toBe("hint.alreadyEqual");
+    expect(eq.fromSelection(doc, [l2, l1])).toBe("hint.alreadyEqual");
+  });
+});

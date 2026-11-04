@@ -179,6 +179,8 @@ export const en: Record<string, string> = {
   "hint.selectLinesOr2Points": "Select lines, or two points.",
   "hint.selectLines2": "Select two lines.",
   "hint.selectTangent": "Select a line and a curve, or two curves.",
+  "hint.alreadyEqual": "Those are already equal.",
+  "hint.alreadyParallel": "Those are already parallel.",
   "hint.selectEqual": "Select two or more lines, or two or more circles and arcs.",
   "hint.selectCurves2": "Select two circles or arcs.",
   "hint.selectPointAndLine": "Select a point and a line.",
