@@ -23,6 +23,14 @@ export function split(doc: SketchDoc, sel: Id[]) {
  * points that belong to selected geometry.
  */
 export function fitSelection(def: ConstraintType, doc: SketchDoc, sel: Id[]): ReturnType<ConstraintType["fromSelection"]> {
+  // A whole stack of joined points counts as one point.
+  const seen = new Set<Id>();
+  sel = sel.filter((id) => {
+    if (!(id in doc.points)) return true;
+    if (seen.has(id)) return false;
+    stackOf(doc, id).forEach((p) => seen.add(p));
+    return true;
+  });
   const out = def.fromSelection(doc, sel);
   if (typeof out !== "string") return out;
   const owned = new Set(split(doc, sel).geoms.flatMap((g) => geomPoints(g)));
@@ -32,12 +40,26 @@ export function fitSelection(def: ConstraintType, doc: SketchDoc, sel: Id[]): Re
   return typeof again === "string" ? out : again;
 }
 
-/** Points joined to `p` by coincident constraints, `p` included. */
-function joined(doc: SketchDoc, p: Id): Set<Id> {
+/**
+ * The stack of points at one spot: `p` and every point joined to it by
+ * coincident constraints, directly or through others. Where several lines
+ * meet, each brings its own end point, so this is what "the corner" means.
+ */
+export function stackOf(doc: SketchDoc, p: Id): Id[] {
   const out = new Set([p]);
-  for (const c of Object.values(doc.constraints)) if (c.type === "coincident" && c.refs.includes(p)) c.refs.forEach((r) => out.add(r));
-  return out;
+  const cons = Object.values(doc.constraints).filter((c) => c.type === "coincident");
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const c of cons) {
+      if (!c.refs.some((r) => out.has(r)) || c.refs.every((r) => out.has(r))) continue;
+      c.refs.forEach((r) => out.add(r));
+      grew = true;
+    }
+  }
+  return [...out];
 }
+
+const joined = (doc: SketchDoc, p: Id) => new Set(stackOf(doc, p));
 
 /**
  * Add a constraint, upgrading what is already there: a midpoint replaces the

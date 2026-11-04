@@ -7,7 +7,7 @@ import { colors } from "./style";
 import { ICON, isWatched, layoutDims, layoutIcons, linearOffset, type DimLayout } from "./layout";
 import type { View } from "./view";
 import { drawConstraintIcon } from "../ui/icons";
-import { drawBodies, drawJointLetters, drawJoints, drawLooseGeometry } from "./bars";
+import { drawBodies, drawBodyLines, drawJointLetters, drawJoints, drawLooseGeometry } from "./bars";
 import { posedDoc } from "../motion/bodies";
 import { drawTraces } from "./traces";
 
@@ -24,6 +24,7 @@ export function render(ctx: CanvasRenderingContext2D, ed: Editor, w: number, h: 
     // Motion mode: no constraints or dimensions, just bars, slots and joints.
     drawLooseGeometry(ctx, ed);
     drawBodies(ctx, ed, { posed: true, alpha: 1, hover: ed.hover });
+    drawBodyLines(ctx, ed);
     drawTraces(ctx, ed);
     drawJoints(ctx, ed);
     drawJointLetters(ctx, ed);

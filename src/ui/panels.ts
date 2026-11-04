@@ -2,7 +2,7 @@ import type { Editor } from "../app/editor";
 import { arcRadius, type Geometry, type Id } from "../core/model";
 import { dist } from "../core/geom";
 import { constraintTypes } from "../constraints";
-import { fitSelection } from "../constraints/select";
+import { fitSelection, stackOf } from "../constraints/select";
 import { dimText, isWatched, measured } from "../render/layout";
 import { t } from "../i18n";
 import { actions } from "./actions";
@@ -224,9 +224,10 @@ export function mountProperties(el: HTMLElement, ed: Editor, sliders: SliderMoti
       if (g.kind === "circle") html += readout(t("panel.radius"), g.r);
       if (g.kind === "arc") html += readout(t("panel.radius"), arcRadius(doc, g));
       html += geomFlags([g]);
-    } else if (sel.length === 1 && doc.points[sel[0]]) {
+    } else if (doc.points[sel[0]] && sel.every((id) => stackOf(doc, sel[0]).includes(id))) {
+      // One point, or one stack of joined points where several lines meet.
       const p = doc.points[sel[0]];
-      html += `<div class="prop-head">${t("geom.point")}</div>`;
+      html += `<div class="prop-head">${t("geom.point")}${sel.length > 1 ? ` <span class="muted">${t("panel.joinedPoints", { n: sel.length })}</span>` : ""}</div>`;
       html += `<div class="readout"><span>${t("panel.position")}</span><b>${p.x.toFixed(2)}, ${p.y.toFixed(2)}</b></div>`;
     } else {
       html += `<div class="prop-head">${t("panel.selected", { n: sel.length })}</div>`;

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { Solver } from "../src/solver/solver";
 import { addConstraint, addGeom, addPoint, emptyDoc, type Line } from "../src/core/model";
 import { constraintTypes } from "../src/constraints";
-import { addConstraintSmart, fitSelection } from "../src/constraints/select";
+import { addConstraintSmart, fitSelection, stackOf } from "../src/constraints/select";
 import { findSnap, snapConstraint, snapExclusions } from "../src/tools/snap";
 import { View } from "../src/render/view";
 
@@ -106,5 +106,18 @@ describe("equal in a busy sketch", () => {
     const eq = constraintTypes.get("equal");
     expect(eq.fromSelection(doc, [l1, l2])).toBe("hint.alreadyEqual");
     expect(eq.fromSelection(doc, [l2, l1])).toBe("hint.alreadyEqual");
+  });
+});
+
+describe("stacked points", () => {
+  it("treats points joined through coincident constraints as one", () => {
+    const { doc, a1, a2, b1, l2 } = twoLines();
+    const c = addPoint(doc, 0, 0);
+    addConstraint(doc, { type: "coincident", refs: [a1, b1] });
+    addConstraint(doc, { type: "coincident", refs: [b1, c] });
+    expect(stackOf(doc, c).sort()).toEqual([a1, b1, c].sort());
+    // The whole stack plus another point: one coincident, not a redundant chain.
+    expect(fitSelection(constraintTypes.get("coincident"), doc, [a1, b1, c, a2])).toEqual([{ type: "coincident", refs: [a1, a2] }]);
+    expect(fitSelection(constraintTypes.get("midpoint"), doc, [a1, b1, c, l2])).toEqual([{ type: "midpoint", refs: [a1, l2] }]);
   });
 });

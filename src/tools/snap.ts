@@ -4,6 +4,7 @@ import { hitTest } from "../render/hit";
 import type { View } from "../render/view";
 import { colors } from "../render/style";
 import { t } from "../i18n";
+import { stackOf } from "../constraints/select";
 import { constraintTypes } from "../constraints";
 import { drawConstraintIcon } from "../ui/icons";
 import type { Snap } from "./types";
@@ -51,10 +52,7 @@ export function findSnap(doc: SketchDoc, view: View, s: Vec, exclude?: Set<Id>):
  * land on its own line or its other end).
  */
 export function snapExclusions(doc: SketchDoc, point: Id): Set<Id> {
-  const joined = new Set<Id>([point]);
-  for (const c of Object.values(doc.constraints)) {
-    if (c.type === "coincident" && c.refs.includes(point)) c.refs.forEach((r) => joined.add(r));
-  }
+  const joined = new Set(stackOf(doc, point));
   const out = new Set(joined);
   for (const g of Object.values(doc.geoms)) {
     const pts = geomPoints(g);

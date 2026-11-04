@@ -1,4 +1,4 @@
-import { addConstraintSmart } from "../constraints/select";
+import { addConstraintSmart, stackOf } from "../constraints/select";
 import { geomPoints, type Id, type SketchDoc, type Vec } from "../core/model";
 import { dist, sub } from "../core/geom";
 import { boxSelect } from "../render/hit";
@@ -20,7 +20,7 @@ type DragState =
 let drag: DragState | null = null;
 let pressed: ToolEvent | null = null;
 let moved = false;
-let narrowTo: Id | null = null;
+let narrowTo: Id[] | null = null;
 
 function pointsOf(doc: SketchDoc, id: Id): Id[] {
   if (id in doc.points) return [id];
@@ -50,8 +50,11 @@ export const selectTool: Tool = {
     }
     // Clicking an item that is already part of a group keeps the group for
     // dragging; a plain click without a drag narrows to that item on release.
-    narrowTo = ed.selection.has(h.id) && !e.shift && !e.ctrl && ed.selection.size > 1 ? h.id : null;
-    if (!ed.selection.has(h.id) || e.shift || e.ctrl) ed.select([h.id], e.shift || e.ctrl);
+    // A point where several lines meet is a stack of joined points: one click takes them all.
+    const ids = h.kind === "point" ? stackOf(ed.doc, h.id) : [h.id];
+    const held = ids.every((id) => ed.selection.has(id));
+    narrowTo = held && !e.shift && !e.ctrl && ed.selection.size > ids.length ? ids : null;
+    if (!held || e.shift || e.ctrl) ed.select(ids, e.shift || e.ctrl);
 
     if (h.kind === "dimension") {
       drag = { kind: "label", cid: h.id };
@@ -63,7 +66,7 @@ export const selectTool: Tool = {
       for (const id of ed.selection) {
         for (const p of pointsOf(ed.doc, id)) from.set(p, { ...ed.doc.points[p] });
       }
-      const single = h.kind === "point" && ed.selection.size === 1 && ed.selection.has(h.id) && !e.ctrl;
+      const single = h.kind === "point" && ed.selection.size === ids.length && ids.every((id) => ed.selection.has(id)) && !e.ctrl;
       drag = { kind: "points", start: e.world, from, single: single ? { id: h.id, exclude: snapExclusions(ed.doc, h.id), snap: null } : null };
     } else {
       drag = null;
@@ -86,7 +89,7 @@ export const selectTool: Tool = {
         // Hold Ctrl to drag past points and lines without snapping.
         const snap = e.ctrl ? null : findSnap(ed.doc, ed.view, e.screen, one.exclude);
         one.snap = snap?.kind === "none" ? null : snap;
-        if (one.snap) targets[0].to = one.snap.at;
+        if (one.snap) for (const tg of targets) tg.to = one.snap.at;
         ed.snap = one.snap;
       }
       ed.drag(targets);
@@ -125,7 +128,7 @@ export const selectTool: Tool = {
     } else if (drag) {
       ed.endDrag();
     }
-    if (!moved && narrowTo) ed.select([narrowTo]);
+    if (!moved && narrowTo) ed.select(narrowTo);
     narrowTo = null;
     drag = null;
     pressed = null;

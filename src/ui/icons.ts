@@ -24,6 +24,8 @@ const paths = {
     "M8.5 6.5l2-2",
     "M17.5 15.5l2-2",
   ],
+  // A tape measure.
+  measure: [circ(10, 12, 7), circ(10, 12, 2), "M17 19h4", "M10 19h7"],
   construction: ["M4 20l2.5-2.5", "M10.75 13.25l2.5-2.5", "M17.5 6.5L20 4"],
   track: ["M3 18h7a7 7 0 0 0 7-7V3", "M7 15h5v6H7z"],
   undo: ["M9 14L4 9l5-5", "M4 9h10.5a5.5 5.5 0 0 1 0 11H11"],
