@@ -67,6 +67,8 @@ export interface Settings {
   solidBars: boolean;
   /** Draw each joint's letter beside it in Motion mode (default on). */
   jointLetters?: boolean;
+  /** Draw the sketch lines over the bars in Motion and Animation (default on). */
+  motionLines?: boolean;
   /** Colour each group of equal lines, and mark each group of parallel lines, in its own colour. */
   showRelations?: boolean;
   /** How new lines, arcs and circles are drawn: as construction, and in which colour. */
