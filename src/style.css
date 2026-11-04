@@ -1188,3 +1188,48 @@ details summary {
 .cons-row.bad { color: #d93025; }
 .cons-row .x { border: 0; background: none; font-size: 16px; line-height: 1; color: var(--muted); cursor: pointer; padding: 0 4px; }
 .cons-row .x:hover { color: #d93025; }
+
+.modal-back {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 24, 31, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  padding: 18px 20px 16px;
+  width: min(360px, calc(100vw - 32px));
+}
+
+.modal h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.modal p {
+  margin: 0 0 16px;
+  color: var(--muted);
+}
+
+.modal-btns {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.modal-btns .btn {
+  margin: 0;
+}
