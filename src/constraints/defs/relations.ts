@@ -14,6 +14,32 @@ function chain(type: string, ids: string[]) {
   return ids.slice(1).map((id, i) => ({ type, refs: [ids[i], id] }));
 }
 
+/**
+ * Chain only what isn't linked yet: items already tied by `type` constraints,
+ * directly or through others (a = b, b = c), count as one. Re-linking them
+ * would be redundant and turn the sketch red, which in a busy sketch happened
+ * for one picking order and not the other. Returns `hint` when there is
+ * nothing new to link.
+ */
+function chainNew(doc: SketchDoc, type: string, ids: string[], hint: string) {
+  const root = new Map<string, string>();
+  const find = (x: string): string => {
+    const r = root.get(x) ?? x;
+    return r === x ? x : find(r);
+  };
+  for (const c of Object.values(doc.constraints)) if (c.type === type) root.set(find(c.refs[0]), find(c.refs[1]));
+  const firsts: string[] = [];
+  const seen = new Set<string>();
+  for (const id of ids) {
+    const r = find(id);
+    if (!seen.has(r)) {
+      seen.add(r);
+      firsts.push(id);
+    }
+  }
+  return firsts.length < 2 ? hint : chain(type, firsts);
+}
+
 export const parallel: ConstraintType = {
   id: "parallel",
   label: "c.parallel",
@@ -22,7 +48,7 @@ export const parallel: ConstraintType = {
   fromSelection(doc, sel) {
     const { lines, geoms, points } = split(doc, sel);
     if (lines.length < 2 || geoms.length !== lines.length || points.length) return "hint.selectLines2";
-    return chain("parallel", lines.map((l) => l.id));
+    return chainNew(doc, "parallel", lines.map((l) => l.id), "hint.alreadyParallel");
   },
   toPrimitives: (_d, c) => [{ id: `${c.id}#0`, type: "parallel", l1_id: c.refs[0], l2_id: c.refs[1] }],
   anchor: anchorFirst,
@@ -123,8 +149,8 @@ export const equal: ConstraintType = {
   fromSelection(doc, sel) {
     const { geoms, lines, curves, points } = split(doc, sel);
     if (points.length || geoms.length < 2) return "hint.selectEqual";
-    if (lines.length === geoms.length) return chain("equal", lines.map((l) => l.id));
-    if (curves.length === geoms.length) return chain("equal", curves.map((g) => g.id));
+    if (lines.length === geoms.length) return chainNew(doc, "equal", lines.map((l) => l.id), "hint.alreadyEqual");
+    if (curves.length === geoms.length) return chainNew(doc, "equal", curves.map((g) => g.id), "hint.alreadyEqual");
     return "hint.selectEqual";
   },
   toPrimitives(doc, c) {

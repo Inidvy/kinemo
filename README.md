@@ -26,12 +26,14 @@ Pushing to `main` deploys to GitHub Pages (Settings → Pages → Source: GitHub
 | O | Point |
 | R / Shift+R | Rectangle by two corners / by centre and corner |
 | D | Dimension: click geometry (or select it first), a preview follows the cursor, click where the label goes, type a value. For a line or two points the label's place picks the kind: beside the line gives its length, above or below gives the horizontal distance, left or right the vertical one. Click an existing dimension to change its value |
+| M | Measure: like Dimension, but the reading only shows the length (in brackets, teal) and follows the sketch as it moves, without fixing anything |
 | B | Coincident (two points), or point on curve (points and one line, circle or arc) |
 | H V P T | Horizontal, vertical, parallel, tangent |
 | N E U Z Y W | Perpendicular, equal, midpoint, concentric, symmetric, fix (sketch only: holds points or lines in place, ignored in Motion mode) |
 | X | Toggle construction on the selected lines; with nothing selected, switch whether new lines are drawn as construction |
 | K | Tag as track |
 | I | Show or hide constraint icons |
+| Q | Colour relations: every group of equal lines gets its own colour, and every group of parallel lines gets matching ∥ marks in its colour |
 | F | Zoom to fit |
 | Del | Delete |
 | Ctrl+A | Select all (Sketch: every line, arc, circle and loose point; Motion: every body) |
@@ -49,6 +51,8 @@ Constraint keys work both ways: select items first and press the key, or press t
 Snapping: while drawing, the pointer snaps to points (coincident), the middle of a line (midpoint, shown with a diamond) and lines, arcs and circles (point on curve), and the canvas names the constraint it will add. Dragging a single point with Select snaps the same way, and dropping it adds that constraint in the same undo step; hold Ctrl while dragging to move it without snapping. Pressing U (midpoint) on a point that already sits on the line replaces that point-on-line constraint instead of clashing with it.
 
 The right panel works on several lines at once: tick construction or track, or pick a colour for all of them (Auto keeps blue for free, black for defined). With nothing selected it sets how new lines are drawn. It also lists the constraints on the selection, each with its own × to delete it. Equal, parallel and perpendicular show their icon on both lines.
+
+Where several lines meet, each brings its own end point: one click on the corner selects the whole stack of joined points, and dragging it snaps like a single point. In Motion and Animation the sketch lines are drawn over each body's bar, and lines outside any body stay faint.
 
 Line colour shows status: blue is still free to move, black is fully defined.
 

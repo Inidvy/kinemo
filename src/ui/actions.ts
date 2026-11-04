@@ -5,6 +5,7 @@ import type { Editor, Mode } from "../app/editor";
 import { applyPose, nextBodyName, ownerMap, poseOf } from "../motion/bodies";
 import { t } from "../i18n";
 import { constraintTypes } from "../constraints";
+import { fitSelection } from "../constraints/select";
 import { downloadDoc, pickFile } from "../io/file";
 import { icons, constraintIcon } from "./icons";
 import { pendingConstraint, startConstraintPick } from "../tools/constraintPick";
@@ -179,6 +180,17 @@ const builtins: Action[] = [
     active: (ed) => ed.doc.settings.showConstraintIcons,
   },
   {
+    id: "relations",
+    label: "action.relations",
+    icon: icons.relations,
+    shortcut: "q",
+    shift: false,
+    group: "view",
+    modes: SKETCH,
+    run: (ed) => ed.live((doc) => (doc.settings.showRelations = !doc.settings.showRelations)),
+    active: (ed) => !!ed.doc.settings.showRelations,
+  },
+  {
     id: "fit",
     label: "action.fit",
     icon: icons.fit,
@@ -348,7 +360,12 @@ for (const c of constraintTypes.all()) {
     modes: SKETCH,
     // Apply to the selection if it fits; otherwise pick the items next.
     run: (ed) => {
-      if (!ed.applyConstraint(c.id, true)) startConstraintPick(ed, c.id, (id) => setTool(ed, id));
+      if (ed.applyConstraint(c.id, true)) return;
+      // Items that are already tied this way: say so rather than wait for more picks.
+      const sel = [...ed.selection].filter((id) => id in ed.doc.points || id in ed.doc.geoms);
+      const why = fitSelection(c, ed.doc, sel);
+      if (typeof why === "string" && why.startsWith("hint.already")) return ed.flash(t(why));
+      startConstraintPick(ed, c.id, (id) => setTool(ed, id));
     },
     active: (ed) => ed.tool === "constraint" && pendingConstraint() === c.id,
   });

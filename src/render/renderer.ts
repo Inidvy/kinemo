@@ -7,9 +7,10 @@ import { colors } from "./style";
 import { ICON, isWatched, layoutDims, layoutIcons, linearOffset, type DimLayout } from "./layout";
 import type { View } from "./view";
 import { drawConstraintIcon } from "../ui/icons";
-import { drawBodies, drawJointLetters, drawJoints, drawLooseGeometry } from "./bars";
+import { drawBodies, drawBodyLines, drawJointLetters, drawJoints, drawLooseGeometry } from "./bars";
 import { posedDoc } from "../motion/bodies";
 import { drawTraces } from "./traces";
+import { relationGroups, type GroupColors } from "./relations";
 
 /** Draws the sketch. Stateless: everything comes from the editor. */
 export function render(ctx: CanvasRenderingContext2D, ed: Editor, w: number, h: number): void {
@@ -24,6 +25,7 @@ export function render(ctx: CanvasRenderingContext2D, ed: Editor, w: number, h: 
     // Motion mode: no constraints or dimensions, just bars, slots and joints.
     drawLooseGeometry(ctx, ed);
     drawBodies(ctx, ed, { posed: true, alpha: 1, hover: ed.hover });
+    drawBodyLines(ctx, ed);
     drawTraces(ctx, ed);
     drawJoints(ctx, ed);
     drawJointLetters(ctx, ed);
@@ -56,11 +58,14 @@ export function render(ctx: CanvasRenderingContext2D, ed: Editor, w: number, h: 
   for (const cid of ed.analysis.culprits) doc.constraints[cid]?.refs.forEach((r) => badRef.set(r, colors.conflict));
   const badCons = (cid: Id) => (ed.analysis.culprits.has(cid) ? colors.conflict : ed.analysis.fixes.has(cid) ? colors.conflictSoft : null);
 
+  const equalColors = doc.settings.showRelations ? relationGroups(doc, "equal") : null;
+  const parallelColors = doc.settings.showRelations ? relationGroups(doc, "parallel", 5) : null;
   for (const g of Object.values(doc.geoms)) {
     const isSel = ed.selection.has(g.id) || selRefs.has(g.id);
     const isHover = ed.hover === g.id || hoverRefs.has(g.id);
-    drawGeom(ctx, ed, g, isSel, isHover, badRef.get(g.id) ?? null);
+    drawGeom(ctx, ed, g, isSel, isHover, badRef.get(g.id) ?? null, equalColors?.get(g.id));
   }
+  if (parallelColors) drawParallelMarks(ctx, ed, parallelColors);
 
   for (const p of Object.values(doc.points)) {
     const s = v.toScreen(p);
@@ -150,7 +155,7 @@ function geomColor(ed: Editor, g: Geometry, bad: string | null): string {
   return free ? colors.free : colors.defined;
 }
 
-function drawGeom(ctx: CanvasRenderingContext2D, ed: Editor, g: Geometry, sel: boolean, hover: boolean, bad: string | null) {
+function drawGeom(ctx: CanvasRenderingContext2D, ed: Editor, g: Geometry, sel: boolean, hover: boolean, bad: string | null, group?: string) {
   const v = ed.view;
   const doc = ed.doc;
   ctx.setLineDash(g.construction ? [6, 4] : []);
@@ -178,11 +183,37 @@ function drawGeom(ctx: CanvasRenderingContext2D, ed: Editor, g: Geometry, sel: b
     ctx.stroke();
     ctx.globalAlpha = 1;
   }
-  ctx.strokeStyle = sel ? colors.selected : geomColor(ed, g, bad);
-  ctx.lineWidth = g.track ? 2.5 : g.construction ? 1.2 : 1.6;
+  ctx.strokeStyle = sel ? colors.selected : (bad ?? group ?? geomColor(ed, g, bad));
+  ctx.lineWidth = group ? 3 : g.track ? 2.5 : g.construction ? 1.2 : 1.6;
   path();
   ctx.stroke();
   ctx.setLineDash([]);
+}
+
+/** Two short ticks across the middle of each parallel line, in its group's colour. */
+function drawParallelMarks(ctx: CanvasRenderingContext2D, ed: Editor, groups: GroupColors) {
+  const v = ed.view;
+  ctx.save();
+  ctx.setLineDash([]);
+  ctx.lineWidth = 2.2;
+  ctx.lineCap = "round";
+  for (const [id, color] of groups) {
+    const g = ed.doc.geoms[id];
+    if (g?.kind !== "line") continue;
+    const a = v.toScreen(ed.doc.points[g.p1]), b = v.toScreen(ed.doc.points[g.p2]);
+    const d = norm(sub(b, a)), n = perp(d);
+    const m = scale(add(a, b), 0.5);
+    ctx.strokeStyle = color;
+    ctx.beginPath();
+    for (const k of [-3, 3]) {
+      const c = add(m, scale(d, k));
+      // Slanted like the ∥ glyph.
+      ctx.moveTo(c.x + n.x * 6 + d.x * 2, c.y + n.y * 6 + d.y * 2);
+      ctx.lineTo(c.x - n.x * 6 - d.x * 2, c.y - n.y * 6 - d.y * 2);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function arrow(ctx: CanvasRenderingContext2D, at: Vec, dir: Vec) {

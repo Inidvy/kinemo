@@ -119,19 +119,31 @@ export class Solver {
    */
   freePoints(doc: SketchDoc): Set<Id> {
     const free = new Set<Id>();
+    // Points already settled: free, or held where they are along with their stack.
+    const known = new Set<Id>();
+    const stacks = coincidentStacks(doc);
     const eps = 0.01;
     for (const p of Object.values(doc.points)) {
+      if (known.has(p.id)) continue;
       for (const [dx, dy] of [
         [eps, 0],
         [0, eps],
       ]) {
         const r = this.solve(doc, [{ point: p.id, to: { x: p.x + dx, y: p.y + dy } }]);
-        const q = r.doc.points[p.id];
-        if (r.ok && Math.hypot(q.x - p.x, q.y - p.y) > eps * 0.1) {
-          free.add(p.id);
-          break;
+        if (!r.ok) continue;
+        // Every point the nudge moved is free too, so it needs no probe of its own.
+        // In a busy sketch this saves most of the solves.
+        for (const q of Object.values(r.doc.points)) {
+          const q0 = doc.points[q.id];
+          if (Math.hypot(q.x - q0.x, q.y - q0.y) > eps * 0.1) {
+            free.add(q.id);
+            known.add(q.id);
+          }
         }
+        if (free.has(p.id)) break;
       }
+      // A point that can't move holds the points stacked on it in place too.
+      if (!free.has(p.id)) for (const q of stacks.get(p.id) ?? [p.id]) known.add(q);
     }
     return free;
   }
@@ -157,6 +169,24 @@ export class Solver {
 const HOLD = 0.01;
 /** Above this many constraints, trust the solver's own list instead of testing each removal. */
 const MAX_FIX_SCAN = 400;
+
+/** Each point's stack: the points joined to it by coincident constraints, directly or through others. */
+function coincidentStacks(doc: SketchDoc): Map<Id, Id[]> {
+  const root = new Map<Id, Id>();
+  const find = (x: Id): Id => {
+    const r = root.get(x) ?? x;
+    return r === x ? x : find(r);
+  };
+  for (const c of Object.values(doc.constraints)) if (c.type === "coincident") root.set(find(c.refs[0]), find(c.refs[1]));
+  const groups = new Map<Id, Id[]>();
+  for (const id of Object.keys(doc.points)) {
+    const r = find(id);
+    groups.set(r, [...(groups.get(r) ?? []), id]);
+  }
+  const out = new Map<Id, Id[]>();
+  for (const g of groups.values()) for (const id of g) out.set(id, g);
+  return out;
+}
 
 function without(doc: SketchDoc, skip: Set<Id>): SketchDoc {
   const d = cloneDoc(doc);

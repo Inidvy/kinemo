@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { Solver } from "../src/solver/solver";
 import { addConstraint, addGeom, addPoint, emptyDoc, type Line } from "../src/core/model";
 import { constraintTypes } from "../src/constraints";
-import { addConstraintSmart, fitSelection } from "../src/constraints/select";
+import { addConstraintSmart, fitSelection, stackOf } from "../src/constraints/select";
 import { findSnap, snapConstraint, snapExclusions } from "../src/tools/snap";
 import { View } from "../src/render/view";
 
@@ -93,5 +93,54 @@ describe("horizontal and vertical distances", () => {
     expect(Solver.clean(r)).toBe(true);
     expect(r.doc.points[a2].x - r.doc.points[a1].x).toBeCloseTo(25);
     expect(r.doc.points[a2].y - r.doc.points[a1].y).toBeCloseTo(10);
+  });
+});
+
+describe("equal in a busy sketch", () => {
+  it("doesn't link lines that are already equal through others, in either order", () => {
+    const { doc, l1, l2 } = twoLines();
+    const a = addPoint(doc, 0, 50), b = addPoint(doc, 30, 50);
+    const l3 = addGeom<Line>(doc, { kind: "line", p1: a, p2: b });
+    addConstraint(doc, { type: "equal", refs: [l1, l3] });
+    addConstraint(doc, { type: "equal", refs: [l3, l2] });
+    const eq = constraintTypes.get("equal");
+    expect(eq.fromSelection(doc, [l1, l2])).toBe("hint.alreadyEqual");
+    expect(eq.fromSelection(doc, [l2, l1])).toBe("hint.alreadyEqual");
+  });
+});
+
+describe("stacked points", () => {
+  it("treats points joined through coincident constraints as one", () => {
+    const { doc, a1, a2, b1, l2 } = twoLines();
+    const c = addPoint(doc, 0, 0);
+    addConstraint(doc, { type: "coincident", refs: [a1, b1] });
+    addConstraint(doc, { type: "coincident", refs: [b1, c] });
+    expect(stackOf(doc, c).sort()).toEqual([a1, b1, c].sort());
+    // The whole stack plus another point: one coincident, not a redundant chain.
+    expect(fitSelection(constraintTypes.get("coincident"), doc, [a1, b1, c, a2])).toEqual([{ type: "coincident", refs: [a1, a2] }]);
+    expect(fitSelection(constraintTypes.get("midpoint"), doc, [a1, b1, c, l2])).toEqual([{ type: "midpoint", refs: [a1, l2] }]);
+  });
+});
+
+import { relationGroups } from "../src/render/relations";
+
+describe("relation colours", () => {
+  it("gives each transitive equal group one colour", () => {
+    const doc = emptyDoc();
+    const ids = ["a", "b", "c", "d", "e"];
+    ids.forEach((id, i) => {
+      doc.points[`${id}1`] = { id: `${id}1`, x: i, y: 0 };
+      doc.points[`${id}2`] = { id: `${id}2`, x: i, y: 1 };
+      doc.geoms[id] = { id, kind: "line", p1: `${id}1`, p2: `${id}2` };
+    });
+    doc.constraints.c1 = { id: "c1", type: "equal", refs: ["a", "b"] };
+    doc.constraints.c2 = { id: "c2", type: "equal", refs: ["c", "b"] };
+    doc.constraints.c3 = { id: "c3", type: "equal", refs: ["d", "e"] };
+    const g = relationGroups(doc, "equal");
+    expect(g.get("a")).toBe(g.get("b"));
+    expect(g.get("c")).toBe(g.get("a"));
+    expect(g.get("d")).toBe(g.get("e"));
+    expect(g.get("d")).not.toBe(g.get("a"));
+    expect(relationGroups(doc, "parallel").size).toBe(0);
   });
 });

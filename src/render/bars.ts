@@ -625,13 +625,35 @@ function bodyDistance(doc: SketchDoc, v: View, b: Body, s: Vec, discs: Set<Id>):
   return best;
 }
 
+/**
+ * The sketch lines inside each body, drawn over its bar where the body is now,
+ * so the drawing stays readable in Motion mode: thin and dark like in the
+ * sketch, dashed for construction lines.
+ */
+export function drawBodyLines(ctx: CanvasRenderingContext2D, ed: Editor): void {
+  const doc = ed.doc;
+  ctx.save();
+  ctx.lineWidth = 1.5;
+  // Dark like the sketch's lines, a little see-through so the bar's colour shows.
+  ctx.strokeStyle = "rgba(29, 31, 36, 0.7)";
+  for (const b of Object.values(doc.bodies)) {
+    const pose = poseOf(doc, b.id);
+    for (const g of bodyGeoms(doc, b)) {
+      ctx.setLineDash(g.construction ? [5, 4] : []);
+      tracePath(ctx, doc, ed.view, pose, g);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
 /** Sketch geometry that isn't in any body, drawn faintly in Motion mode. */
 export function drawLooseGeometry(ctx: CanvasRenderingContext2D, ed: Editor): void {
   const doc = ed.doc;
   const own = ed.mech.owner;
   ctx.save();
-  ctx.strokeStyle = "#c3c8d1";
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = "#a9b0bb";
+  ctx.lineWidth = 1.2;
   for (const g of Object.values(doc.geoms)) {
     if (own.has(g.id)) continue;
     ctx.setLineDash(g.construction ? [5, 4] : []);

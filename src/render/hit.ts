@@ -25,15 +25,17 @@ const GEOM_R = 6;
 export function hitTest(doc: SketchDoc, view: View, s: Vec, opts: HitOptions): Hit | null {
   const ex = opts.exclude ?? new Set<Id>();
   if (!opts.geometryOnly) {
-    for (const d of layoutDims(doc, view)) {
+    // Icons are drawn over dimension labels, and later ones over earlier ones:
+    // check in reverse drawing order so a click gets the one you can see.
+    if (opts.icons) {
+      for (const b of layoutIcons(doc, view).reverse()) {
+        if (s.x >= b.x && s.x <= b.x + ICON && s.y >= b.y && s.y <= b.y + ICON) return { kind: "constraint", id: b.cid };
+      }
+    }
+    for (const d of layoutDims(doc, view).reverse()) {
       const t = view.toScreen(d.text);
       const w = d.label.length * 7 + 8;
       if (Math.abs(s.x - t.x) < w / 2 && Math.abs(s.y - t.y) < 10) return { kind: "dimension", id: d.cid };
-    }
-    if (opts.icons) {
-      for (const b of layoutIcons(doc, view)) {
-        if (s.x >= b.x && s.x <= b.x + ICON && s.y >= b.y && s.y <= b.y + ICON) return { kind: "constraint", id: b.cid };
-      }
     }
   }
 
