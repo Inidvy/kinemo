@@ -102,7 +102,7 @@ function copy(ed: Editor): boolean {
   } catch {
     /* storage full or blocked: this tab still has it */
   }
-  ed.flash(t("clip.copied", { n: items.geoms.length + items.points.filter((p) => !items.geoms.some((g) => geomPoints(g).includes(p.id))).length }));
+  ed.flash(t("clip.copied", { n: items.geoms.length + items.points.filter((p) => !items.geoms.some((g) => geomPoints(g).includes(p.id))).length + (items.labels ?? []).filter((l) => !l.point).length }));
   return true;
 }
 
@@ -113,7 +113,7 @@ function paste(ed: Editor): void {
   } catch {
     /* use what this tab has */
   }
-  if (!clip?.items.points.length) return ed.flash(t("clip.empty"));
+  if (!clip?.items.points.length && !clip?.items.labels?.length) return ed.flash(t("clip.empty"));
   const c = clip;
   const center = clipCenter(c.items);
   c.pasted++;

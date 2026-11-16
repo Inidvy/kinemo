@@ -616,7 +616,8 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
     const input = e.target as HTMLInputElement;
     const what = input.dataset.tl;
     const n = parseFloat(input.value);
-    if (what === "length" && n > 0) editTimeline((tl) => (tl.length = n));
+    // The clip can't end before its last key: that key would play nowhere and couldn't be reached.
+    if (what === "length" && n > 0) editTimeline((tl) => (tl.length = Math.max(n, ...Object.values(tl.keys).flat().map((k) => k.t))));
     if (what === "mode") editTimeline((tl) => (tl.mode = input.value as Timeline["mode"]));
     if (what === "lead" && n >= 0) (p.leadIn = n), ed.emit();
     if (what === "quality") setExportScale(n);
@@ -629,7 +630,7 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
         editTimeline((tl) => {
           const keys = tl.keys[s.driver];
           const k = keys[s.i];
-          k.t = Math.max(0, n);
+          k.t = Math.min(tl.length, Math.max(0, n));
           keys.sort((a, b) => a.t - b.t);
           p.keySel = [{ driver: s.driver, i: keys.indexOf(k) }];
         });

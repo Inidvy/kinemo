@@ -175,7 +175,7 @@ export const concentric: ConstraintType = {
   fromSelection(doc, sel) {
     const { curves, geoms, points } = split(doc, sel);
     if (curves.length < 2 || geoms.length !== curves.length || points.length) return "hint.selectCurves2";
-    return chain("concentric", curves.map((g) => g.id));
+    return chainNew(doc, "concentric", curves.map((g) => g.id), "hint.alreadyConcentric");
   },
   toPrimitives(doc, c) {
     const [a, b] = c.refs.map((id) => doc.geoms[id]) as { c: string }[];

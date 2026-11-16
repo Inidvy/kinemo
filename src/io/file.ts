@@ -109,7 +109,8 @@ try {
 
 /** A short fingerprint of a document (FNV-1a), to tell whether it changed since it was last saved. */
 function fingerprint(doc: SketchDoc): string {
-  const s = JSON.stringify(doc);
+  // Where the mechanism stands right now is not work to save: playing or dragging it must not ask.
+  const s = JSON.stringify({ ...doc, motion: { ...doc.motion, poses: {} } });
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
   return `${s.length}:${(h >>> 0).toString(36)}`;
@@ -127,6 +128,6 @@ export function markSaved(doc: SketchDoc): void {
 
 /** True when the sketch has something in it that hasn't been saved to a file. */
 export function hasUnsavedWork(doc: SketchDoc): boolean {
-  if (!Object.keys(doc.points).length && !Object.keys(doc.geoms).length) return false;
+  if (!Object.keys(doc.points).length && !Object.keys(doc.geoms).length && !Object.keys(doc.labels ?? {}).length) return false;
   return fingerprint(doc) !== savedHash;
 }
