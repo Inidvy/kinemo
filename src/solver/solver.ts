@@ -118,6 +118,11 @@ export class Solver {
    * y moves it. Used to colour under-defined geometry.
    */
   freePoints(doc: SketchDoc): Set<Id> {
+    return finish(this.freePointSteps(doc));
+  }
+
+  /** `freePoints` one point at a time: yields after each, so a caller can spread the work out. */
+  *freePointSteps(doc: SketchDoc): Generator<void, Set<Id>> {
     const free = new Set<Id>();
     // Points already settled: free, or held where they are along with their stack.
     const known = new Set<Id>();
@@ -144,18 +149,25 @@ export class Solver {
       }
       // A point that can't move holds the points stacked on it in place too.
       if (!free.has(p.id)) for (const q of stacks.get(p.id) ?? [p.id]) known.add(q);
+      yield;
     }
     return free;
   }
 
   /** Circles whose radius is not fixed by constraints. */
   freeRadii(doc: SketchDoc): Set<Id> {
+    return finish(this.freeRadiusSteps(doc));
+  }
+
+  /** `freeRadii` one circle at a time, like `freePointSteps`. */
+  *freeRadiusSteps(doc: SketchDoc): Generator<void, Set<Id>> {
     const free = new Set<Id>();
     for (const g of Object.values(doc.geoms)) {
       if (g.kind !== "circle") continue;
       const r = this.solve(doc, [], [{ id: "probe#0", type: "circle_radius", c_id: g.id, radius: g.r + 0.01, temporary: true }]);
       const g2 = r.doc.geoms[g.id];
       if (r.ok && g2.kind === "circle" && Math.abs(g2.r - g.r) > 0.001) free.add(g.id);
+      yield;
     }
     return free;
   }
@@ -186,6 +198,14 @@ function coincidentStacks(doc: SketchDoc): Map<Id, Id[]> {
   const out = new Map<Id, Id[]>();
   for (const g of groups.values()) for (const id of g) out.set(id, g);
   return out;
+}
+
+/** Run a stepwise computation to the end. */
+function finish<T>(steps: Generator<void, T>): T {
+  for (;;) {
+    const r = steps.next();
+    if (r.done) return r.value;
+  }
 }
 
 function without(doc: SketchDoc, skip: Set<Id>): SketchDoc {
