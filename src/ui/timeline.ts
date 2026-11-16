@@ -1,13 +1,15 @@
 import type { Editor } from "../app/editor";
+import { esc } from "./html";
+import { download, fileStem } from "../io/file";
 import type { Id, Keyframe, Timeline } from "../core/model";
 import { jointKinds } from "../motion/joints";
-import { clipTime, DEFAULT_TIMELINE, deleteKeys, keysFromRecording, setKey, shiftKeys, spinDirection, spinKeys, setTurnWay, timelineOf, turnWay, valueAt, type KeyRef, type TurnWay } from "../motion/timeline";
+import { clipTime, deleteKeys, keysFromRecording, setKey, shiftKeys, spinDirection, spinKeys, setTurnWay, timelineCopy, timelineOf, turnWay, valueAt, type KeyRef, type TurnWay } from "../motion/timeline";
 import { clipTargets, turnOf } from "../motion/clip";
 import { t } from "../i18n";
 import { icons } from "./icons";
 import { driverName } from "./motionPanels";
 import { chartSeries, drawSeries, fmtValue, valueOn, type Series } from "./chart";
-import { download, EXPORT_SCALES, exportGif, exportScale, recordVideo, setExportScale } from "./exportMedia";
+import { EXPORT_SCALES, exportGif, exportScale, recordVideo, setExportScale } from "./exportMedia";
 
 /** How the stretch after a key moves: eased in and out, at a steady speed, or on a smooth curve through the keys. */
 const SEGS = ["eased", "steady", "smooth"] as const;
@@ -24,7 +26,6 @@ function setSeg(k: Keyframe, how: Seg) {
 const PALETTE = ["#2069e0", "#d81b60", "#0b8a7a", "#f28c18", "#8e44ad", "#5f6b7a"];
 
 
-const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
 /** Seconds of count-in before a recording starts, remembered in this browser. */
 const LEAD_IN_KEY = "kinemo.recordLeadIn";
@@ -288,7 +289,7 @@ export class Player {
       return ed.emit();
     }
     ed.change((doc) => {
-      const tl: Timeline = structuredClone(doc.motion.timeline ?? DEFAULT_TIMELINE);
+      const tl: Timeline = timelineCopy(doc);
       tl.length = Math.max(0.1, Math.ceil(duration * 10) / 10);
       for (const [id, vs] of moved) tl.keys[id] = keysFromRecording(take.t, vs);
       doc.motion.timeline = tl;
@@ -321,7 +322,7 @@ export class Player {
     if (!pick.length) pick = drivers;
     const time = this.time;
     ed.change((doc) => {
-      const tl: Timeline = structuredClone(doc.motion.timeline ?? DEFAULT_TIMELINE);
+      const tl: Timeline = timelineCopy(doc);
       for (const d of pick) {
         if (!(d.id in now)) continue;
         let v = now[d.id];
@@ -347,7 +348,7 @@ export class Player {
     if (!refs.length) return false;
     this.keySel = [];
     this.ed.change((doc) => {
-      const tl: Timeline = structuredClone(doc.motion.timeline ?? DEFAULT_TIMELINE);
+      const tl: Timeline = timelineCopy(doc);
       deleteKeys(tl, refs);
       doc.motion.timeline = tl;
     });
@@ -560,12 +561,12 @@ export function mountTimeline(el: HTMLElement, ed: Editor): Player {
     const head = ["time (s)", ...series.map((s) => `${s.label} (${s.unit === "deg" ? "deg" : "mm"})`)];
     const rows = series[0].times.map((time, i) => [time.toFixed(4), ...series.map((s) => (s.values[i] ?? NaN).toFixed(4))]);
     const csv = [head, ...rows].map((r) => r.map((c) => (/[",\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c)).join(",")).join("\n");
-    download(new Blob([csv], { type: "text/csv" }), "mechanism.csv");
+    download(new Blob([csv], { type: "text/csv" }), `${fileStem(ed.doc)}.csv`);
   };
 
   const editTimeline = (fn: (tl: Timeline) => void) =>
     ed.change((doc) => {
-      const tl: Timeline = structuredClone(doc.motion.timeline ?? DEFAULT_TIMELINE);
+      const tl: Timeline = timelineCopy(doc);
       fn(tl);
       doc.motion.timeline = tl;
     });

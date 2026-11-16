@@ -1,4 +1,5 @@
 import type { Editor } from "../app/editor";
+import { esc } from "./html";
 import { arcRadius, deleteItems, type Geometry, type Id } from "../core/model";
 import { LABEL_SIZE, labelBody, labelsOf } from "../core/labels";
 import { ownerMap } from "../motion/bodies";
@@ -14,7 +15,6 @@ import { toggleTrace } from "../tools/motion";
 import { timelinePlayer } from "./timeline";
 import { bodiesSection, bodyProps, motionProps, motionTree, patchSliders, wireMotionPanel } from "./motionPanels";
 
-const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
 function geomName(g: Geometry, index: number): string {
   return `${t(`geom.${g.kind}`)} ${index}`;

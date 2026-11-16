@@ -165,6 +165,8 @@ export interface MotionState {
 
 export interface SketchDoc {
   version: number;
+  /** What the user called the mechanism: shown in the top bar and used for file names. */
+  name?: string;
   points: Record<Id, Point>;
   geoms: Record<Id, Geometry>;
   constraints: Record<Id, Constraint>;
@@ -230,15 +232,6 @@ export function arcRadius(doc: SketchDoc, a: Arc): number {
   const c = doc.points[a.c];
   const s = doc.points[a.s];
   return Math.hypot(s.x - c.x, s.y - c.y);
-}
-
-export function isPoint(doc: SketchDoc, id: Id): boolean {
-  return id in doc.points;
-}
-
-export function kindOf(doc: SketchDoc, id: Id): "point" | GeomKind | undefined {
-  if (id in doc.points) return "point";
-  return doc.geoms[id]?.kind;
 }
 
 /**

@@ -72,16 +72,6 @@ export function bodyGeoms(doc: SketchDoc, b: Body): Geometry[] {
   return b.members.map((id) => doc.geoms[id]).filter(Boolean);
 }
 
-export function bodyPointIds(doc: SketchDoc, b: Body): Id[] {
-  const out = new Set<Id>();
-  for (const m of b.members) {
-    if (doc.points[m]) out.add(m);
-    const g = doc.geoms[m];
-    if (g) geomPoints(g).forEach((p) => out.add(p));
-  }
-  return [...out];
-}
-
 export function applyPose(p: Pose, v: Vec): Vec {
   const c = Math.cos(p.a), s = Math.sin(p.a);
   return { x: c * v.x - s * v.y + p.x, y: s * v.x + c * v.y + p.y };
@@ -97,11 +87,6 @@ export function posedDoc(doc: SketchDoc): SketchDoc {
   const points: SketchDoc["points"] = {};
   for (const p of Object.values(doc.points)) points[p.id] = { ...p, ...applyPose(poseOf(doc, owner.get(p.id)), p) };
   return { ...doc, points };
-}
-
-/** Where a sketch point is in Motion mode. Points outside bodies stay put. */
-export function motionPoint(doc: SketchDoc, owner: Map<Id, Id>, pointId: Id): Vec {
-  return applyPose(poseOf(doc, owner.get(pointId)), doc.points[pointId]);
 }
 
 /** Body colours to pick from: strong, so they read through the see-through fill. */

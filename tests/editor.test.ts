@@ -73,3 +73,28 @@ describe("unsaved work", () => {
     expect(hasUnsavedWork(doc)).toBe(false);
   });
 });
+
+describe("document name", () => {
+  it("names saved files after the document, and a document after its file", async () => {
+    const { fileStem, nameFromFile, parseDoc, serialiseDoc } = await import("../src/io/file");
+    const doc = emptyDoc();
+    expect(fileStem(doc)).toBe("mechanism");
+    doc.name = "Four-bar: v2 / test";
+    expect(fileStem(doc)).toBe("Four-bar v2 test");
+    expect(parseDoc(serialiseDoc(doc)).name).toBe("Four-bar: v2 / test");
+    expect(nameFromFile("Walker (2).kinemo.json")).toBe("Walker");
+  });
+});
+
+describe("groups", () => {
+  it("joins ids through others and keeps lone ids apart", async () => {
+    const { Groups } = await import("../src/core/groups");
+    const g = new Groups();
+    g.join("a", "b");
+    g.join("c", "b");
+    g.join("x", "y");
+    expect(g.find("a")).toBe(g.find("c"));
+    expect(g.find("a")).not.toBe(g.find("x"));
+    expect(g.all(["z"]).map((m) => m.sort().join("")).sort()).toEqual(["abc", "xy", "z"]);
+  });
+});

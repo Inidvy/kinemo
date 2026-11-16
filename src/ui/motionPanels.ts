@@ -1,4 +1,5 @@
 import type { Editor } from "../app/editor";
+import { esc } from "./html";
 import type { Body, Driver, Id } from "../core/model";
 import { bodyColor, fixedGround, isGround, PALETTE, posedDoc } from "../motion/bodies";
 import { constraintTypes } from "../constraints";
@@ -9,7 +10,6 @@ import { icons } from "./icons";
 import { addDriver, keyName } from "../motion/drivers";
 import type { SliderMotion } from "./sliderMotion";
 
-const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
 const bodyName = (ed: Editor, id: Id) => (id === "" ? t("body.world") : (ed.doc.bodies[id]?.name ?? "?"));
 

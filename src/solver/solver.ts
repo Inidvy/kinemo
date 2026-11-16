@@ -1,4 +1,5 @@
 import { GcsWrapper, init_planegcs_module, SolveStatus, Algorithm, DebugMode } from "@salusoft89/planegcs";
+import { Groups } from "../core/groups";
 import { arcRadius, cloneDoc, type Id, type SketchDoc, type Vec } from "../core/model";
 import { angleOf } from "../core/geom";
 import { constraintTypes } from "../constraints";
@@ -184,19 +185,10 @@ const MAX_FIX_SCAN = 400;
 
 /** Each point's stack: the points joined to it by coincident constraints, directly or through others. */
 function coincidentStacks(doc: SketchDoc): Map<Id, Id[]> {
-  const root = new Map<Id, Id>();
-  const find = (x: Id): Id => {
-    const r = root.get(x) ?? x;
-    return r === x ? x : find(r);
-  };
-  for (const c of Object.values(doc.constraints)) if (c.type === "coincident") root.set(find(c.refs[0]), find(c.refs[1]));
-  const groups = new Map<Id, Id[]>();
-  for (const id of Object.keys(doc.points)) {
-    const r = find(id);
-    groups.set(r, [...(groups.get(r) ?? []), id]);
-  }
+  const stacked = new Groups();
+  for (const c of Object.values(doc.constraints)) if (c.type === "coincident") stacked.join(c.refs[0], c.refs[1]);
   const out = new Map<Id, Id[]>();
-  for (const g of groups.values()) for (const id of g) out.set(id, g);
+  for (const g of stacked.all(Object.keys(doc.points))) for (const id of g) out.set(id, g);
   return out;
 }
 

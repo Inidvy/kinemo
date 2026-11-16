@@ -23,7 +23,29 @@ async function main() {
 
   const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
   $("#brand").textContent = t("app.name");
-  $("#doc-name").textContent = t("doc.untitled");
+  // The document's name: type to rename it. Files are saved and exported under it.
+  const nameBox = document.createElement("input");
+  nameBox.placeholder = t("doc.untitled");
+  nameBox.title = t("doc.renameTip");
+  nameBox.spellcheck = false;
+  $("#doc-name").append(nameBox);
+  const showName = () => {
+    if (document.activeElement !== nameBox) nameBox.value = ed.doc.name ?? "";
+    nameBox.size = Math.max(8, (nameBox.value || nameBox.placeholder).length);
+  };
+  nameBox.addEventListener("input", showName);
+  nameBox.addEventListener("change", () => {
+    const name = nameBox.value.trim();
+    if (name !== (ed.doc.name ?? "")) ed.change((doc) => (name ? (doc.name = name) : delete doc.name));
+  });
+  nameBox.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Escape") nameBox.value = ed.doc.name ?? "";
+    if (e.key === "Enter" || e.key === "Escape") nameBox.blur();
+  });
+  nameBox.addEventListener("blur", showName);
+  ed.subscribe(showName);
+  showName();
 
   const canvas = $<HTMLCanvasElement>("#canvas");
   mountCanvas(canvas, ed);

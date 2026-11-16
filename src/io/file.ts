@@ -72,13 +72,27 @@ export function loadAutosave(): SketchDoc | null {
   }
 }
 
-export function downloadDoc(doc: SketchDoc, name = "mechanism"): void {
-  const blob = new Blob([serialiseDoc(doc)], { type: "application/json" });
+/** Hand the user a file to save. */
+export function download(blob: Blob, name: string): void {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `${name}.kinemo.json`;
+  a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+/** The document's name as the start of a file name: "mechanism" while it has none. */
+export function fileStem(doc: SketchDoc): string {
+  return (doc.name ?? "").replace(/[\\/:*?"<>|\x00-\x1f]/g, " ").replace(/\s+/g, " ").trim() || "mechanism";
+}
+
+/** A name for a document from the file it was opened from. */
+export function nameFromFile(file: string): string {
+  return file.replace(/(\.kinemo)?\.json$/i, "").replace(/ \(\d+\)$/, "").trim();
+}
+
+export function downloadDoc(doc: SketchDoc): void {
+  download(new Blob([serialiseDoc(doc)], { type: "application/json" }), `${fileStem(doc)}.kinemo.json`);
 }
 
 export function pickFile(): Promise<SketchDoc> {
@@ -90,7 +104,10 @@ export function pickFile(): Promise<SketchDoc> {
       const f = input.files?.[0];
       if (!f) return;
       try {
-        resolve(parseDoc(await f.text()));
+        const doc = parseDoc(await f.text());
+        // Files from before documents had names are called after their file.
+        if (!doc.name && nameFromFile(f.name) !== "mechanism") doc.name = nameFromFile(f.name);
+        resolve(doc);
       } catch (e) {
         reject(e);
       }

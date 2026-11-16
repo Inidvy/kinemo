@@ -1,4 +1,5 @@
 import type { ConstraintType, Primitive } from "../types";
+import { Groups } from "../../core/groups";
 import { split, geomAnchor, P } from "../select";
 import type { Constraint, Geometry, Id, SketchDoc, Vec } from "../../core/model";
 import { dot, perp, sub } from "../../core/geom";
@@ -22,16 +23,12 @@ function chain(type: string, ids: string[]) {
  * nothing new to link.
  */
 function chainNew(doc: SketchDoc, type: string, ids: string[], hint: string) {
-  const root = new Map<string, string>();
-  const find = (x: string): string => {
-    const r = root.get(x) ?? x;
-    return r === x ? x : find(r);
-  };
-  for (const c of Object.values(doc.constraints)) if (c.type === type) root.set(find(c.refs[0]), find(c.refs[1]));
+  const tied = new Groups();
+  for (const c of Object.values(doc.constraints)) if (c.type === type) tied.join(c.refs[0], c.refs[1]);
   const firsts: string[] = [];
   const seen = new Set<string>();
   for (const id of ids) {
-    const r = find(id);
+    const r = tied.find(id);
     if (!seen.has(r)) {
       seen.add(r);
       firsts.push(id);

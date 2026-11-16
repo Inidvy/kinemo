@@ -2,6 +2,7 @@
 export const en: Record<string, string> = {
   "app.name": "Kinemo",
   "doc.untitled": "Untitled mechanism",
+  "doc.renameTip": "Name of this mechanism: click to change it. Files are saved under it.",
 
   "tab.sketch": "Sketch",
   "tab.motion": "Motion",
@@ -39,7 +40,6 @@ export const en: Record<string, string> = {
   "action.new": "New",
   "action.open": "Open…",
   "action.save": "Save",
-  "action.cancel": "Cancel",
   "action.makeBody": "Group into a body",
   "action.ground": "Toggle ground",
   "action.bars": "Solid bars",
@@ -108,7 +108,6 @@ export const en: Record<string, string> = {
   "export.video": "Export video",
   "export.recording": "Recording… (stop)",
   "export.videoTip": "Record one whole cycle of the clip as a video",
-  "export.csv": "Export CSV",
   "export.csvTip": "Slider and watched values over the clip, as a spreadsheet",
   "export.noVideo": "This browser can't record video.",
   "timeline.play": "Play",

@@ -1,9 +1,9 @@
 import type { Editor } from "../app/editor";
+import { esc } from "./html";
 import { t } from "../i18n";
 import { icons } from "./icons";
 import { constraintName } from "./panels";
 
-const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
 /**
  * Banner over the canvas while the sketch is over-constrained. Names the

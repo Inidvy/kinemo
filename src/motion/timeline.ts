@@ -6,6 +6,11 @@ export function timelineOf(doc: SketchDoc): Timeline {
   return doc.motion.timeline ?? DEFAULT_TIMELINE;
 }
 
+/** The document's timeline as a copy that can be changed and put back. */
+export function timelineCopy(doc: SketchDoc): Timeline {
+  return structuredClone(doc.motion.timeline ?? DEFAULT_TIMELINE);
+}
+
 /** Ease in and out: slow at each key, fastest in between. */
 const ease = (u: number) => u * u * (3 - 2 * u);
 

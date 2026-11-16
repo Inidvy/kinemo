@@ -114,8 +114,3 @@ export function geomAnchor(doc: SketchDoc, id: Id): Vec {
   if (g.kind === "line") return lineMid(doc, g);
   return curveAnchor(doc, g);
 }
-
-/** Planegcs needs separate primitive types per geometry kind. */
-export function curveSuffix(g: Geometry): "c" | "a" {
-  return g.kind === "circle" ? "c" : "a";
-}
