@@ -3,7 +3,7 @@ import { angleOf, dist } from "../core/geom";
 import { colors } from "../render/style";
 import type { View } from "../render/view";
 import type { Editor } from "../app/editor";
-import { icons } from "../ui/icons";
+import { icons } from "../render/icons";
 import { placePoint } from "./build";
 import type { Snap, Tool } from "./types";
 

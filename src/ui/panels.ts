@@ -1,7 +1,8 @@
 import type { Editor } from "../app/editor";
 import { esc } from "./html";
 import { arcRadius, deleteItems, type Geometry, type Id } from "../core/model";
-import { LABEL_SIZE, labelBody, labelsOf } from "../core/labels";
+import { LABEL_SIZE, labelsOf } from "../core/labels";
+import { labelBody } from "../motion/labels";
 import { ownerMap } from "../motion/bodies";
 import { dist } from "../core/geom";
 import { constraintTypes } from "../constraints";
@@ -9,10 +10,10 @@ import { fitSelection, stackOf } from "../constraints/select";
 import { dimText, isWatched, measured } from "../render/layout";
 import { t } from "../i18n";
 import { actions } from "./actions";
-import { constraintIcon, icons } from "./icons";
+import { constraintIcon, icons } from "../render/icons";
 import type { SliderMotion } from "./sliderMotion";
 import { toggleTrace } from "../tools/motion";
-import { timelinePlayer } from "./timeline";
+import { timelinePlayer } from "../app/player";
 import { bodiesSection, bodyProps, motionProps, motionTree, patchSliders, wireMotionPanel } from "./motionPanels";
 
 

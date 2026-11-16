@@ -1,5 +1,6 @@
 import { DOC_VERSION, emptyDoc, geomPoints, type SketchDoc } from "../core/model";
 import { t } from "../i18n";
+import { constraintTypes } from "../constraints";
 
 const AUTOSAVE_KEY = "kinemo.autosave";
 
@@ -48,7 +49,36 @@ export function parseDoc(text: string): SketchDoc {
   }
   doc.version = DOC_VERSION;
   const base = emptyDoc();
-  return { ...base, ...(doc as object), settings: { ...base.settings, ...((doc.settings as object) ?? {}) } } as SketchDoc;
+  const out = { ...base, ...(doc as object), settings: { ...base.settings, ...((doc.settings as object) ?? {}) } } as SketchDoc;
+  if (!wellFormed(out)) throw new Error(t("file.badFile"));
+  // A constraint of a kind this version doesn't know, or on something that isn't there, can't be shown or solved.
+  for (const c of Object.values(out.constraints)) {
+    if (!constraintTypes.find(c.type) || !c.refs.every((r) => r in out.points || r in out.geoms)) delete out.constraints[c.id];
+  }
+  return out;
+}
+
+/** Whether a parsed document has the shape the app relies on, so a damaged or foreign file is refused instead of breaking the app later. */
+function wellFormed(doc: SketchDoc): boolean {
+  const record = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x);
+  const num = (x: unknown) => typeof x === "number" && Number.isFinite(x);
+  if (![doc.points, doc.geoms, doc.constraints, doc.bodies, doc.labels, doc.motion, doc.motion?.poses, doc.motion?.drivers].every(record)) return false;
+  if (!num(doc.nextId)) return false;
+  for (const [id, p] of Object.entries(doc.points)) if (!record(p) || p.id !== id || !num(p.x) || !num(p.y)) return false;
+  const point = (id: unknown) => typeof id === "string" && id in doc.points;
+  for (const [id, g] of Object.entries(doc.geoms)) {
+    if (!record(g) || g.id !== id) return false;
+    if (g.kind === "line") {
+      if (!point(g.p1) || !point(g.p2)) return false;
+    } else if (g.kind === "circle") {
+      if (!point(g.c) || !num(g.r)) return false;
+    } else if (g.kind === "arc") {
+      if (!point(g.c) || !point(g.s) || !point(g.e)) return false;
+    } else return false;
+  }
+  for (const [id, c] of Object.entries(doc.constraints)) if (!record(c) || c.id !== id || typeof c.type !== "string" || !Array.isArray(c.refs)) return false;
+  for (const [id, b] of Object.entries(doc.bodies)) if (!record(b) || b.id !== id || !Array.isArray(b.members)) return false;
+  return true;
 }
 
 export function serialiseDoc(doc: SketchDoc): string {

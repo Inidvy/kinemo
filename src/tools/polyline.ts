@@ -1,6 +1,6 @@
 import { addConstraint, addGeom, addPoint, type Arc, type Id, type Line, type SketchDoc, type Vec } from "../core/model";
 import { add, angleOf, dist, dot, norm, perp, scale, sub } from "../core/geom";
-import { icons } from "../ui/icons";
+import { icons } from "../render/icons";
 import { t } from "../i18n";
 import { inferAxis, placePoint } from "./build";
 import { arcFromNormal, arcFromTangent, type ArcThrough } from "./polylineGeom";

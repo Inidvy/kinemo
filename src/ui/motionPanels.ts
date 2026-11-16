@@ -6,7 +6,7 @@ import { constraintTypes } from "../constraints";
 import { dimText, isWatched } from "../render/layout";
 import { jointKinds, type Joint } from "../motion/joints";
 import { t } from "../i18n";
-import { icons } from "./icons";
+import { icons } from "../render/icons";
 import { addDriver, keyName } from "../motion/drivers";
 import type { SliderMotion } from "./sliderMotion";
 

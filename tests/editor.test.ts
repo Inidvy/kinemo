@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { addGeom, addPoint, emptyDoc, type Circle } from "../src/core/model";
+import { addGeom, addPoint, emptyDoc, type Circle, type Line } from "../src/core/model";
 import { addLabel } from "../src/core/labels";
 import { clipCenter, copyItems, pasteClip } from "../src/core/clipboard";
 import { constraintTypes } from "../src/constraints";
@@ -96,5 +96,35 @@ describe("groups", () => {
     expect(g.find("a")).toBe(g.find("c"));
     expect(g.find("a")).not.toBe(g.find("x"));
     expect(g.all(["z"]).map((m) => m.sort().join("")).sort()).toEqual(["abc", "xy", "z"]);
+  });
+});
+
+describe("opening files", () => {
+  it("refuses a file whose contents are damaged", async () => {
+    const { parseDoc, serialiseDoc } = await import("../src/io/file");
+    const good = emptyDoc();
+    const a = addPoint(good, 0, 0), b = addPoint(good, 10, 0);
+    addGeom<Line>(good, { kind: "line", p1: a, p2: b });
+    expect(Object.keys(parseDoc(serialiseDoc(good)).geoms)).toHaveLength(1);
+    const broken = (change: (d: Record<string, any>) => void) => {
+      const raw = JSON.parse(serialiseDoc(good));
+      change(raw.doc);
+      return () => parseDoc(JSON.stringify(raw));
+    };
+    expect(broken((d) => (d.points = []))).toThrow();
+    expect(broken((d) => (d.points[a].x = "left"))).toThrow();
+    expect(broken((d) => delete d.points[b])).toThrow();
+    expect(broken((d) => (Object.values<any>(d.geoms)[0].kind = "spline"))).toThrow();
+  });
+
+  it("drops constraints it cannot use and keeps the rest", async () => {
+    const { parseDoc, serialiseDoc } = await import("../src/io/file");
+    const doc = emptyDoc();
+    const a = addPoint(doc, 0, 0), b = addPoint(doc, 10, 0);
+    const l = addGeom<Line>(doc, { kind: "line", p1: a, p2: b });
+    doc.constraints.c1 = { id: "c1", type: "horizontal", refs: [l] };
+    doc.constraints.c2 = { id: "c2", type: "fromTheFuture", refs: [l] };
+    doc.constraints.c3 = { id: "c3", type: "horizontal", refs: ["gone"] };
+    expect(Object.keys(parseDoc(serialiseDoc(doc)).constraints)).toEqual(["c1"]);
   });
 });

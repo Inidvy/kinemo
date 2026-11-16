@@ -1,8 +1,8 @@
 import type { Editor } from "../app/editor";
 import { tools, toolInMode } from "../tools";
 import { actions, actionInMode } from "./actions";
-import { setTool } from "./toolbar";
-import { timelinePlayer } from "./timeline";
+import { setTool } from "../app/modes";
+import { timelinePlayer } from "../app/player";
 
 /** Global keyboard shortcuts, read from the tool and action registries. */
 export function mountKeys(ed: Editor): void {

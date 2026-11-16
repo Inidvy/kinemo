@@ -1,4 +1,4 @@
-import { icons } from "../ui/icons";
+import { icons } from "../render/icons";
 import type { Tool } from "./types";
 
 /**

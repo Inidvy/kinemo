@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { addGeom, addPoint, deleteItems, emptyDoc, pruneBodies, type Line } from "../src/core/model";
-import { addLabel, labelAt, labelMotionAt } from "../src/core/labels";
+import { addLabel, labelAt } from "../src/core/labels";
+import { labelMotionAt } from "../src/motion/labels";
 import { ownerMap } from "../src/motion/bodies";
 import { copyItems, pasteClip } from "../src/core/clipboard";
 import { parseDoc, serialiseDoc } from "../src/io/file";

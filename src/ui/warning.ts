@@ -1,7 +1,7 @@
 import type { Editor } from "../app/editor";
 import { esc } from "./html";
 import { t } from "../i18n";
-import { icons } from "./icons";
+import { icons } from "../render/icons";
 import { constraintName } from "./panels";
 
 

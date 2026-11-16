@@ -6,7 +6,7 @@ import { colors } from "../render/style";
 import { t } from "../i18n";
 import { stackOf } from "../constraints/select";
 import { constraintTypes } from "../constraints";
-import { drawConstraintIcon } from "../ui/icons";
+import { drawConstraintIcon } from "../render/icons";
 import type { Snap } from "./types";
 import { Solver } from "../solver/solver";
 import { cloneDoc } from "../core/model";

@@ -4,9 +4,9 @@ import { clipTime, timelineOf } from "../motion/timeline";
 import { render } from "../render/renderer";
 import { download, fileStem } from "../io/file";
 import { t } from "../i18n";
-import type { Player } from "./timeline";
+import type { Player } from "../app/player";
 import type { Vec } from "../core/model";
-import { outlinePoints } from "./actions";
+import { outlinePoints } from "../render/outline";
 import { setMinPixelRatio } from "./canvas";
 
 /** How many times their layout size exports are drawn at: more is sharper but slower and bigger. */

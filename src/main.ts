@@ -4,7 +4,8 @@ import { Editor } from "./app/editor";
 import { Solver } from "./solver/solver";
 import { autosave, loadAutosave } from "./io/file";
 import { mountCanvas } from "./ui/canvas";
-import { mountToolbar, switchMode } from "./ui/toolbar";
+import { mountToolbar } from "./ui/toolbar";
+import { switchMode } from "./app/modes";
 import { mountKeys } from "./ui/keys";
 import { mountFeatureTree, mountProperties } from "./ui/panels";
 import { mountDimEditor } from "./ui/dimEditor";
@@ -15,7 +16,7 @@ import { mountTimeline } from "./ui/timeline";
 import { actions } from "./ui/actions";
 import { tools } from "./tools";
 import { t } from "./i18n";
-import { svgIcon, iconPaths } from "./ui/icons";
+import { svgIcon, iconPaths } from "./render/icons";
 
 async function main() {
   const solver = await Solver.create(wasmUrl);

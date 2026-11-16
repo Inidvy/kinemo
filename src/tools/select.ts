@@ -3,7 +3,7 @@ import { geomPoints, type Id, type SketchDoc, type Vec } from "../core/model";
 import { dist, sub } from "../core/geom";
 import { boxSelect } from "../render/hit";
 import { colors } from "../render/style";
-import { icons } from "../ui/icons";
+import { icons } from "../render/icons";
 import { dimAnchor } from "../render/layout";
 import { constraintTypes } from "../constraints";
 import type { DragTarget } from "../solver/solver";
