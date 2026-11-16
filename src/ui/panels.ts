@@ -41,8 +41,10 @@ export function mountFeatureTree(el: HTMLElement, ed: Editor): void {
     }
   });
 
+  let shown = "";
   const update = () => {
     if (ed.mode === "motion") {
+      shown = "";
       el.innerHTML = motionTree(ed);
       return;
     }
@@ -68,7 +70,7 @@ export function mountFeatureTree(el: HTMLElement, ed: Editor): void {
         return row(c.id, `${constraintIcon(def.id, esc(def.glyph), 14)}${esc(constraintName(ed, c.id))}`, bad, true);
       })
       .join("");
-    el.innerHTML = `
+    const html = `
       <div class="panel-title">${t("panel.features")}</div>
       <div class="feature">
         <div class="feature-head"><span class="sketch-icon">${icons.sketch}</span>${t("panel.sketch")}${status}</div>
@@ -77,6 +79,10 @@ export function mountFeatureTree(el: HTMLElement, ed: Editor): void {
         ${labelsOf(ed.doc).length ? `<details open><summary>${t("panel.labels")} <span class="count">${labelsOf(ed.doc).length}</span></summary>${labelsOf(ed.doc).map((l) => row(l.id, l.text, "kind-label")).join("")}</details>` : ""}
         ${bodiesSection(ed)}
       </div>`;
+    // Most changes (the pointer moving, a pan) leave the list as it is: keep it, with its scroll and folded sections.
+    if (html === shown) return;
+    shown = html;
+    el.innerHTML = html;
   };
 
   function row(id: Id, label: string, cls = "", raw = false): string {

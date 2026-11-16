@@ -1,4 +1,5 @@
 import type { Editor } from "../app/editor";
+import { sameParts } from "../core/memo";
 import type { Id, SketchDoc, Vec } from "../core/model";
 import { applyPose, ownerMap, poseOf } from "../motion/bodies";
 import { sweepPaths } from "../motion/paths";
@@ -14,8 +15,9 @@ let pending = "";
 let timer = 0;
 
 /** Everything a path depends on, apart from where the bodies are now. */
+const keyOfParts = sameParts((parts) => JSON.stringify(parts));
 function keyOf(doc: SketchDoc): string {
-  return JSON.stringify([doc.points, doc.geoms, doc.constraints, doc.bodies, doc.motion.drivers, doc.motion.timeline, doc.motion.traces]);
+  return keyOfParts([doc.points, doc.geoms, doc.constraints, doc.bodies, doc.motion.drivers, doc.motion.timeline, doc.motion.traces]);
 }
 
 function pathsFor(ed: Editor): Map<Id, Vec[]> | null {
