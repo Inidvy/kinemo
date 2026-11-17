@@ -1,6 +1,22 @@
 import type { SketchDoc } from "../core/model";
+import { jointKinds } from "./joints";
 import { Mechanism } from "./kinematics";
 import { timelineOf, valuesAt } from "./timeline";
+
+/** A full turn of the joint a slider drives, when that joint goes round. */
+export function turnOf(doc: SketchDoc, mech: Mechanism, driver: string): number | undefined {
+  const j = mech.joint(doc.motion.drivers[driver]?.joint);
+  if (!j) return undefined;
+  const kind = jointKinds.get(j.kind);
+  if (!kind.wraps?.(j)) return undefined;
+  const [lo, hi] = kind.range(doc, j);
+  return hi - lo;
+}
+
+/** What each keyed slider's joint should be at a time in the clip. */
+export function clipTargets(doc: SketchDoc, mech: Mechanism, time: number): { joint: string; value: number }[] {
+  return valuesAt(timelineOf(doc), time, (driver) => turnOf(doc, mech, driver)).flatMap(({ driver, value }) => (doc.motion.drivers[driver] ? [{ joint: doc.motion.drivers[driver].joint, value }] : []));
+}
 
 /** The mechanism's pose at evenly spaced times through the timeline clip. */
 export interface ClipSamples {
@@ -27,7 +43,7 @@ export function sampleClip(doc: SketchDoc, n = 120): ClipSamples | null {
   let q = mech.current();
   for (let i = 0; i <= n; i++) {
     const time = (tl.length * i) / n;
-    const targets = valuesAt(tl, time).flatMap(({ driver, value }) => (doc.motion.drivers[driver] ? [{ joint: doc.motion.drivers[driver].joint, value }] : []));
+    const targets = clipTargets(doc, mech, time);
     const r = mech.driveAll(targets, q);
     if (!r.reached && i > 0) break;
     q = r.q;

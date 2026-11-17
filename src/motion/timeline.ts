@@ -6,6 +6,11 @@ export function timelineOf(doc: SketchDoc): Timeline {
   return doc.motion.timeline ?? DEFAULT_TIMELINE;
 }
 
+/** The document's timeline as a copy that can be changed and put back. */
+export function timelineCopy(doc: SketchDoc): Timeline {
+  return structuredClone(doc.motion.timeline ?? DEFAULT_TIMELINE);
+}
+
 /** Ease in and out: slow at each key, fastest in between. */
 const ease = (u: number) => u * u * (3 - 2 * u);
 
@@ -33,11 +38,26 @@ export function valueAt(keys: Keyframe[] | undefined, t: number): number | null 
   return last.v;
 }
 
-/** Every keyed slider's value at time t. */
-export function valuesAt(tl: Timeline, t: number): { driver: Id; value: number }[] {
+/**
+ * A looping clip's keys with the loop closed: after the last key the slider
+ * goes back to where the first key has it, arriving as the clip starts over
+ * (and before the first key it comes from the last). A slider that goes
+ * round (`per`, a full turn) comes back to the nearest reading of the first
+ * key, so a whole turn keeps turning. A key at the very end is left alone.
+ */
+export function loopedKeys(keys: Keyframe[], length: number, per?: number): Keyframe[] {
+  if (!keys.length) return keys;
+  const first = keys[0], last = keys[keys.length - 1];
+  if (last.t >= length - 1e-6) return keys;
+  const shift = per ? Math.round((last.v - first.v) / per) * per : 0;
+  return [{ ...last, t: last.t - length, v: last.v - shift }, ...keys, { ...first, t: first.t + length, v: first.v + shift }];
+}
+
+/** Every keyed slider's value at time t. `per` gives a full turn for sliders that go round. */
+export function valuesAt(tl: Timeline, t: number, per?: (driver: Id) => number | undefined): { driver: Id; value: number }[] {
   const out: { driver: Id; value: number }[] = [];
   for (const [driver, keys] of Object.entries(tl.keys)) {
-    const v = valueAt(keys, t);
+    const v = valueAt(tl.mode === "loop" ? loopedKeys(keys, tl.length, per?.(driver)) : keys, t);
     if (v !== null) out.push({ driver, value: v });
   }
   return out;
@@ -161,4 +181,27 @@ export function spinDirection(keys: Keyframe[] | undefined, span: number): numbe
   if (keys?.length !== 2 || !keys[0].linear) return 0;
   const d = keys[1].v - keys[0].v;
   return Math.abs(Math.abs(d) - Math.abs(span)) < 1e-6 ? Math.sign(d) : 0;
+}
+
+/** Which way a turning slider goes from a key to the next: counter-clockwise (up) or clockwise (down). */
+export type TurnWay = "ccw" | "cw";
+
+/** Which way a slider turns from key i to the next, or null when it holds still. */
+export function turnWay(keys: Keyframe[], i: number): TurnWay | null {
+  const d = keys[i + 1] ? keys[i + 1].v - keys[i].v : 0;
+  return Math.abs(d) < 1e-9 ? null : d > 0 ? "ccw" : "cw";
+}
+
+/**
+ * Make a turning slider go the given way from key i to the next, less than
+ * a full turn (`per`), or a whole turn if the two keys are at the same
+ * angle. The keys after it move by whole turns with it, so they keep their angles.
+ */
+export function setTurnWay(keys: Keyframe[], i: number, way: TurnWay, per: number): void {
+  if (!keys[i + 1]) return;
+  const d = keys[i + 1].v - keys[i].v;
+  const r = ((d % per) + per) % per;
+  const want = way === "ccw" ? (r < 1e-9 ? per : r) : r < 1e-9 ? -per : r - per;
+  const shift = want - d;
+  for (let j = i + 1; j < keys.length; j++) keys[j].v += shift;
 }

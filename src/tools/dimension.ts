@@ -4,9 +4,9 @@ import { constraintTypes } from "../constraints";
 import { fitSelection } from "../constraints/select";
 import type { ConstraintType } from "../constraints/types";
 import { defaultLabel, dimAnchor, formatValue } from "../render/layout";
-import { drawDimension } from "../render/renderer";
+import { drawDimension } from "../render/dimension";
 import { colors } from "../render/style";
-import { icons } from "../ui/icons";
+import { icons } from "../render/icons";
 import { t } from "../i18n";
 import type { Tool } from "./types";
 

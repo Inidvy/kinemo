@@ -2,10 +2,11 @@ import { GIFEncoder, applyPalette, quantize } from "gifenc";
 import type { Editor } from "../app/editor";
 import { clipTime, timelineOf } from "../motion/timeline";
 import { render } from "../render/renderer";
+import { download, fileStem } from "../io/file";
 import { t } from "../i18n";
-import type { Player } from "./timeline";
+import type { Player } from "../app/player";
 import type { Vec } from "../core/model";
-import { outlinePoints } from "./actions";
+import { outlinePoints } from "../render/outline";
 import { setMinPixelRatio } from "./canvas";
 
 /** How many times their layout size exports are drawn at: more is sharper but slower and bigger. */
@@ -28,14 +29,6 @@ export function setExportScale(n: number): void {
   } catch {
     // Not remembered, but nothing else depends on it.
   }
-}
-
-export function download(blob: Blob, name: string): void {
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 /** How long one whole cycle of the clip runs: there and back for ping-pong. */
@@ -99,13 +92,13 @@ export async function exportGif(ed: Editor, player: Player, progress: (done: num
       }
     }
     gif.finish();
-    download(new Blob([gif.bytes()], { type: "image/gif" }), "mechanism.gif");
+    download(new Blob([gif.bytes()], { type: "image/gif" }), `${fileStem(ed.doc)}.gif`);
   } finally {
     ed.exporting = false;
     ed.view.zoom = view.zoom;
     ed.view.origin = view.origin;
     // Put the mechanism back as it was: making the GIF isn't an edit.
-    ed.live((d) => (d.motion.poses = before));
+    ed.setPoses(before);
     ed.endDrag();
     player.time = time0;
     ed.setTool(tool);
@@ -134,7 +127,7 @@ export function recordVideo(ed: Editor, player: Player, onEnd: () => void): Medi
   rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
   rec.onstop = () => {
     setMinPixelRatio(1);
-    download(new Blob(chunks, { type }), `mechanism.${type.startsWith("video/mp4") ? "mp4" : "webm"}`);
+    download(new Blob(chunks, { type }), `${fileStem(ed.doc)}.${type.startsWith("video/mp4") ? "mp4" : "webm"}`);
     onEnd();
   };
   rec.start();

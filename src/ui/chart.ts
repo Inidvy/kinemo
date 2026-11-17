@@ -1,4 +1,5 @@
 import type { Editor } from "../app/editor";
+import { sameParts } from "../core/memo";
 import type { Id, SketchDoc } from "../core/model";
 import { constraintTypes } from "../constraints";
 import { sampleClip } from "../motion/clip";
@@ -66,8 +67,9 @@ let cache: { key: string; series: Series[] } | null = null;
 let pending = "";
 let timer = 0;
 
+const keyOfParts = sameParts((parts) => JSON.stringify(parts));
 function keyOf(doc: SketchDoc): string {
-  return JSON.stringify([doc.points, doc.geoms, doc.constraints, doc.bodies, doc.motion.drivers, doc.motion.timeline]);
+  return keyOfParts([doc.points, doc.geoms, doc.constraints, doc.bodies, doc.motion.drivers, doc.motion.timeline]);
 }
 
 /** The chart's series for the current document, with labels; null while they are being worked out. */

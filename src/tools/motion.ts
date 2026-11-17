@@ -3,7 +3,7 @@ import { applyPose, isGround, ownerMap, poseOf } from "../motion/bodies";
 import { colors } from "../render/style";
 import { jointKinds } from "../motion/joints";
 import { addDriver } from "../motion/drivers";
-import { icons } from "../ui/icons";
+import { icons } from "../render/icons";
 import { t } from "../i18n";
 import type { Editor } from "../app/editor";
 import type { Tool } from "./types";

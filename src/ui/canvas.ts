@@ -80,6 +80,9 @@ export function mountCanvas(canvas: HTMLCanvasElement, ed: Editor): void {
 
   canvas.addEventListener("pointerdown", (e) => {
     canvas.setPointerCapture(e.pointerId);
+    // A panel box being typed in is done once the canvas is clicked: let go of it, or its panel would stay frozen.
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active.matches("input, select, textarea") && !active.classList.contains("dim-input")) active.blur();
     if (e.pointerType === "touch") {
       touches.set(e.pointerId, screenOf(e));
       if (touches.size === 2) {

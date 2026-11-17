@@ -62,10 +62,26 @@ body {
 }
 
 #doc-name {
-  color: var(--muted);
   white-space: nowrap;
   padding-right: 8px;
   border-right: 1px solid var(--border);
+}
+
+#doc-name input {
+  font: inherit;
+  color: var(--muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 2px 4px;
+  max-width: 28ch;
+}
+
+#doc-name input:hover,
+#doc-name input:focus {
+  border-color: var(--border);
+  color: inherit;
+  outline: none;
 }
 
 #toolbar {
@@ -867,10 +883,6 @@ details summary {
   margin: 0;
 }
 
-.tl-hint {
-  font-size: 12px;
-}
-
 .tl-body {
   position: relative;
   display: grid;
@@ -1245,4 +1257,11 @@ details summary {
   font-size: 13px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   z-index: 5;
+}
+
+.tl-key.ghost {
+  background: #fff;
+  border: 1.5px solid var(--accent);
+  cursor: default;
+  pointer-events: none;
 }

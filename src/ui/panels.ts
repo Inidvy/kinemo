@@ -1,6 +1,8 @@
 import type { Editor } from "../app/editor";
+import { esc } from "./html";
 import { arcRadius, deleteItems, type Geometry, type Id } from "../core/model";
-import { LABEL_SIZE, labelBody, labelsOf } from "../core/labels";
+import { LABEL_SIZE, labelsOf } from "../core/labels";
+import { labelBody } from "../motion/labels";
 import { ownerMap } from "../motion/bodies";
 import { dist } from "../core/geom";
 import { constraintTypes } from "../constraints";
@@ -8,13 +10,12 @@ import { fitSelection, stackOf } from "../constraints/select";
 import { dimText, isWatched, measured } from "../render/layout";
 import { t } from "../i18n";
 import { actions } from "./actions";
-import { constraintIcon, icons } from "./icons";
+import { constraintIcon, icons } from "../render/icons";
 import type { SliderMotion } from "./sliderMotion";
 import { toggleTrace } from "../tools/motion";
-import { timelinePlayer } from "./timeline";
+import { timelinePlayer } from "../app/player";
 import { bodiesSection, bodyProps, motionProps, motionTree, patchSliders, wireMotionPanel } from "./motionPanels";
 
-const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
 function geomName(g: Geometry, index: number): string {
   return `${t(`geom.${g.kind}`)} ${index}`;
@@ -41,8 +42,10 @@ export function mountFeatureTree(el: HTMLElement, ed: Editor): void {
     }
   });
 
+  let shown = "";
   const update = () => {
     if (ed.mode === "motion") {
+      shown = "";
       el.innerHTML = motionTree(ed);
       return;
     }
@@ -68,7 +71,7 @@ export function mountFeatureTree(el: HTMLElement, ed: Editor): void {
         return row(c.id, `${constraintIcon(def.id, esc(def.glyph), 14)}${esc(constraintName(ed, c.id))}`, bad, true);
       })
       .join("");
-    el.innerHTML = `
+    const html = `
       <div class="panel-title">${t("panel.features")}</div>
       <div class="feature">
         <div class="feature-head"><span class="sketch-icon">${icons.sketch}</span>${t("panel.sketch")}${status}</div>
@@ -77,6 +80,10 @@ export function mountFeatureTree(el: HTMLElement, ed: Editor): void {
         ${labelsOf(ed.doc).length ? `<details open><summary>${t("panel.labels")} <span class="count">${labelsOf(ed.doc).length}</span></summary>${labelsOf(ed.doc).map((l) => row(l.id, l.text, "kind-label")).join("")}</details>` : ""}
         ${bodiesSection(ed)}
       </div>`;
+    // Most changes (the pointer moving, a pan) leave the list as it is: keep it, with its scroll and folded sections.
+    if (html === shown) return;
+    shown = html;
+    el.innerHTML = html;
   };
 
   function row(id: Id, label: string, cls = "", raw = false): string {
