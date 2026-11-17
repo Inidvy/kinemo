@@ -249,6 +249,7 @@ export const en: Record<string, string> = {
   "panel.construction": "Construction",
   "panel.pen": "New lines",
   "panel.joinedPoints": "({n} joined)",
+  "panel.consRowHint": "Point at it to see what it ties together; click to keep it highlighted",
   "panel.color": "Colour",
   "panel.colorAuto": "Auto: blue while free, black once defined",
   "pen.constructionOn": "New lines are drawn as construction. Press X again to draw normal lines.",

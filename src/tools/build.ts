@@ -4,10 +4,14 @@ import { snapConstraint } from "./snap";
 import type { Snap } from "./types";
 
 /**
- * Create a point where the user clicked and tie it to whatever it snapped
- * to: coincident with an existing point, the midpoint of a line, or on a curve.
+ * The point for where the user clicked. On an existing point that point is
+ * used again, so lines that end at the same place share one point instead of
+ * stacking coincident copies. Otherwise a new point is made and tied to what
+ * it snapped to: the midpoint of a line, or on a curve. `share: false` always
+ * makes a new point (coincident with the one it snapped to).
  */
-export function placePoint(doc: SketchDoc, snap: Snap): Id {
+export function placePoint(doc: SketchDoc, snap: Snap, share = true): Id {
+  if (share && snap.kind === "point" && doc.points[snap.id]) return snap.id;
   const p = addPoint(doc, snap.at.x, snap.at.y);
   const c = snapConstraint(doc, p, snap);
   if (c) addConstraintSmart(doc, c);

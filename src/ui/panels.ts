@@ -136,10 +136,32 @@ export function mountProperties(el: HTMLElement, ed: Editor, sliders: SliderMoti
       ed.change((doc) => (doc.bodies[id].color = color));
       return;
     }
+    // A constraint of the selected items: click to pick it as well, which keeps it
+    // and what it ties together highlighted; click again to drop it.
+    const consRow = (e.target as HTMLElement).closest<HTMLElement>("[data-cons]");
+    if (consRow) {
+      ed.select([consRow.dataset.cons!], true);
+      return;
+    }
     const b = (e.target as HTMLElement).closest<HTMLElement>("[data-apply],[data-delete]");
     if (!b) return;
     if (b.dataset.apply) ed.applyConstraint(b.dataset.apply);
     if (b.dataset.delete) actions.get("delete").run(ed);
+  });
+  // Pointing at a constraint in the list lights it up on the canvas, with what it ties together.
+  const hoverCons = (id: Id | null) => {
+    if (ed.mode !== "sketch" || ed.hover === id) return;
+    ed.hover = id;
+    ed.emit();
+  };
+  el.addEventListener("mouseover", (e) => {
+    const row = (e.target as HTMLElement).closest<HTMLElement>("[data-cons]");
+    if (row) hoverCons(row.dataset.cons!);
+  });
+  el.addEventListener("mouseout", (e) => {
+    const from = (e.target as HTMLElement).closest<HTMLElement>("[data-cons]");
+    const to = (e.relatedTarget as HTMLElement | null)?.closest?.("[data-cons]");
+    if (from && !to && ed.hover === from.dataset.cons) hoverCons(null);
   });
   el.addEventListener("change", (e) => {
     const input = e.target as HTMLInputElement;
@@ -286,7 +308,8 @@ export function mountProperties(el: HTMLElement, ed: Editor, sliders: SliderMoti
       html += existing
         .map((c) => {
           const def = constraintTypes.get(c.type);
-          return `<div class="cons-row${ed.analysis.conflicting.has(c.id) ? " bad" : ""}">${constraintIcon(def.id, esc(def.glyph), 14)}<span>${esc(constraintName(ed, c.id))}</span><button class="x" data-remove="${c.id}" title="${t("panel.delete")}">×</button></div>`;
+          const mark = (ed.analysis.conflicting.has(c.id) ? " bad" : "") + (ed.selection.has(c.id) ? " sel" : "") + (ed.hover === c.id ? " hover" : "");
+          return `<div class="cons-row${mark}" data-cons="${c.id}" title="${t("panel.consRowHint")}">${constraintIcon(def.id, esc(def.glyph), 14)}<span>${esc(constraintName(ed, c.id))}</span><button class="x" data-remove="${c.id}" title="${t("panel.delete")}">×</button></div>`;
         })
         .join("");
       html += `</div>`;

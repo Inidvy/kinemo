@@ -1,5 +1,5 @@
 import { addConstraintSmart, stackOf } from "../constraints/select";
-import { geomPoints, type Id, type SketchDoc, type Vec } from "../core/model";
+import { geomPoints, mergePoints, type Id, type SketchDoc, type Vec } from "../core/model";
 import { dist, sub } from "../core/geom";
 import { boxSelect } from "../render/hit";
 import { colors } from "../render/style";
@@ -8,6 +8,7 @@ import { dimAnchor } from "../render/layout";
 import { constraintTypes } from "../constraints";
 import type { DragTarget } from "../solver/solver";
 import { t } from "../i18n";
+import { ownerMap } from "../motion/bodies";
 import { findSnap, snapConstraint, snapExclusions, snapIsSafe } from "./snap";
 import type { Snap, Tool, ToolEvent } from "./types";
 
@@ -154,7 +155,14 @@ export const selectTool: Tool = {
         ed.flash(t("hint.snapRedundant"));
       }
       ed.snap = null;
-      ed.endDrag(c ? (doc) => addConstraintSmart(doc, c) : undefined);
+      // Dropped on a point: the two become one point, so lines that end
+      // there share it. Points of two different bodies stay two, pinned
+      // together, since that pin is a joint.
+      const own = ownerMap(ed.doc);
+      const a = own.get(id), b = snap.kind === "point" ? own.get(snap.id) : undefined;
+      const merge = c?.type === "coincident" && snap.kind === "point" && !(a && b && a !== b);
+      if (c && merge) ed.endDrag((doc) => mergePoints(doc, snap.id, id));
+      else ed.endDrag(c ? (doc) => addConstraintSmart(doc, c) : undefined);
     } else if (drag) {
       ed.endDrag();
     }

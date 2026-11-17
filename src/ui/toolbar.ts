@@ -59,7 +59,7 @@ export function mountToolbar(el: HTMLElement, ed: Editor): void {
     if (!a.group) continue;
     const b = button(a.icon, t(a.label) + keyLabel(a.shortcut, a.ctrl, a.shift), () => a.run(ed), keyBadge(a.shortcut, a.ctrl, a.shift));
     groups[a.group].appendChild(b);
-    byMode.push([b, (m) => actionInMode(a, m)]);
+    byMode.push([b, (m) => actionInMode(a, m) && (!a.toolbarModes || a.toolbarModes.includes(m))]);
     if (a.active) toggles.push([a, b]);
   }
 
