@@ -26,6 +26,8 @@ export interface Action {
   group?: "edit" | "constraint" | "view" | "file" | "body" | "motion";
   /** Modes the action works in (default: both). */
   modes?: Mode[];
+  /** Modes its toolbar button shows in, when that is fewer than the modes its shortcut works in. */
+  toolbarModes?: Mode[];
   run(ed: Editor): void;
   /** Toggle actions show as pressed when this returns true. */
   active?(ed: Editor): boolean;
@@ -290,6 +292,27 @@ const builtins: Action[] = [
           addConstraint(doc, { type: "coincident", refs: [id, p] });
           ids[i] = p;
         });
+        // Lines end at shared points. Where a new member shares an end point
+        // with geometry of another body, it gets its own point there, pinned
+        // to the shared one, so the two bodies join at a pin.
+        const own = ownerMap(doc);
+        const split = new Map<Id, Id>();
+        for (const id of ids) {
+          const g = doc.geoms[id] as unknown as Record<string, unknown> | undefined;
+          if (!g) continue;
+          for (const key of ["p1", "p2", "c", "s", "e"]) {
+            const p = g[key];
+            if (typeof p !== "string" || !doc.points[p]) continue;
+            const shared = Object.values(doc.geoms).some((o) => !keep.has(o.id) && own.has(o.id) && geomPoints(o).includes(p));
+            if (!shared) continue;
+            if (!split.has(p)) {
+              const q = addPoint(doc, doc.points[p].x, doc.points[p].y);
+              addConstraint(doc, { type: "coincident", refs: [p, q] });
+              split.set(p, q);
+            }
+            g[key] = split.get(p);
+          }
+        }
         // Selecting new parts with part of a body adds them to that body.
         if (target) {
           doc.bodies[target].members.push(...ids);
@@ -309,6 +332,8 @@ const builtins: Action[] = [
     shortcut: "g",
     shift: true,
     group: "body",
+    // Shift+G still works in Motion; the button only shows while sketching.
+    toolbarModes: SKETCH,
     run(ed) {
       // Selected points become ground pivots (or stop being one).
       const pts = [...ed.selection].filter((id) => id in ed.doc.points);

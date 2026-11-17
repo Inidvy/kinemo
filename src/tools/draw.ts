@@ -1,4 +1,4 @@
-import { addConstraint, addGeom, addPoint, type Arc, type Circle, type Id, type Line, type Vec } from "../core/model";
+import { addConstraint, addGeom, addPoint, type Arc, type Circle, type Line, type Vec } from "../core/model";
 import { angleOf, dist } from "../core/geom";
 import { colors } from "../render/style";
 import type { View } from "../render/view";
@@ -167,28 +167,18 @@ export const arcTool: Tool = {
 let rectFirst: Snap | null = null;
 let rectCursor: Vec | null = null;
 
-/** Four separate lines joined by coincident constraints, two H and two V. */
+/** Four lines that share their corner points, two H and two V. */
 function buildRect(ed: Editor, corners: Vec[], firstSnap: Snap | null, center?: Snap) {
   ed.change((doc) => {
-    const ids: Id[] = [];
-    const lines: Id[] = [];
-    for (let i = 0; i < 4; i++) {
-      const a = corners[i], b = corners[(i + 1) % 4];
-      const p1 = i === 0 && firstSnap ? placePoint(doc, { ...firstSnap, at: a } as Snap) : addPoint(doc, a.x, a.y);
-      const p2 = addPoint(doc, b.x, b.y);
-      ids.push(p1, p2);
-      lines.push(addGeom<Line>(doc, { kind: "line", p1, p2 }));
-    }
-    for (let i = 0; i < 4; i++) {
-      addConstraint(doc, { type: "coincident", refs: [ids[i * 2 + 1], ids[((i + 1) % 4) * 2]] });
-    }
+    const ids = corners.map((a, i) => (i === 0 && firstSnap ? placePoint(doc, { ...firstSnap, at: a } as Snap) : addPoint(doc, a.x, a.y)));
+    const lines = ids.map((p1, i) => addGeom<Line>(doc, { kind: "line", p1, p2: ids[(i + 1) % 4] }));
     addConstraint(doc, { type: "horizontal", refs: [lines[0]] });
     addConstraint(doc, { type: "vertical", refs: [lines[1]] });
     addConstraint(doc, { type: "horizontal", refs: [lines[2]] });
     addConstraint(doc, { type: "vertical", refs: [lines[3]] });
     if (center) {
       const c = placePoint(doc, center);
-      addConstraint(doc, { type: "symmetric", refs: [ids[0], ids[4], c] });
+      addConstraint(doc, { type: "symmetric", refs: [ids[0], ids[2], c] });
     }
   });
 }
@@ -285,8 +275,10 @@ export const pointTool: Tool = {
   hint: "hint.point",
   snaps: true,
   down(ed, e) {
+    // A point placed on a point is a new one, coincident with it (a loose
+    // ground pivot under a body's point, say).
     ed.change((doc) => {
-      placePoint(doc, e.snap);
+      placePoint(doc, e.snap, false);
     });
   },
 };

@@ -277,6 +277,33 @@ export function deleteItems(doc: SketchDoc, ids: Id[]): void {
   pruneBodies(doc);
 }
 
+/**
+ * Make `drop` the same point as `keep`: everything that used `drop` uses
+ * `keep` instead, and `drop` goes. Constraints that only tied the two
+ * together, or that now repeat another one, go too.
+ */
+export function mergePoints(doc: SketchDoc, keep: Id, drop: Id): void {
+  if (keep === drop || !doc.points[keep] || !doc.points[drop]) return;
+  const swap = (id: Id) => (id === drop ? keep : id);
+  for (const g of Object.values(doc.geoms) as unknown as Record<string, unknown>[]) {
+    for (const key of ["p1", "p2", "c", "s", "e"]) if (g[key] === drop) g[key] = keep;
+  }
+  const seen = new Set<string>();
+  for (const c of Object.values(doc.constraints)) {
+    if (!c.refs.includes(drop) && !c.refs.includes(keep)) continue;
+    c.refs = c.refs.map(swap);
+    // A constraint on the same point twice (the coincident that joined them) means nothing now.
+    const pts = c.refs.filter((r) => r in doc.points);
+    const sig = `${c.type}|${c.refs.join(",")}|${c.value ?? ""}`;
+    if (new Set(pts).size < pts.length || seen.has(sig)) delete doc.constraints[c.id];
+    else seen.add(sig);
+  }
+  for (const l of Object.values(doc.labels ?? {})) if (l.point === drop) l.point = keep;
+  for (const b of Object.values(doc.bodies)) b.members = [...new Set(b.members.map(swap))];
+  if (doc.motion.traces) doc.motion.traces = [...new Set(doc.motion.traces.map(swap))];
+  delete doc.points[drop];
+}
+
 /** Drop body members, empty bodies, poses and drivers that point at things that are gone. */
 export function pruneBodies(doc: SketchDoc): void {
   for (const b of Object.values(doc.bodies)) {
@@ -285,7 +312,8 @@ export function pruneBodies(doc: SketchDoc): void {
   }
   for (const id of Object.keys(doc.motion.poses)) if (!doc.bodies[id]) delete doc.motion.poses[id];
   for (const d of Object.values(doc.motion.drivers)) {
-    if (!doc.constraints[d.joint] || !doc.bodies[d.a] || !doc.bodies[d.b]) delete doc.motion.drivers[d.id];
+    // A fixed pivot's slider measures from the world (body ""), which is never in doc.bodies.
+    if (!doc.constraints[d.joint] || (d.a && !doc.bodies[d.a]) || !doc.bodies[d.b]) delete doc.motion.drivers[d.id];
   }
   const keys = doc.motion.timeline?.keys;
   if (keys) for (const id of Object.keys(keys)) if (!doc.motion.drivers[id]) delete keys[id];

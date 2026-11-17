@@ -84,17 +84,20 @@ body {
   outline: none;
 }
 
+/* When the buttons don't fit on one line they wrap onto a second row
+   (whole groups move together) instead of scrolling sideways. */
 #toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 2px;
-  overflow-x: auto;
-  scrollbar-width: thin;
+  gap: 2px 0;
+  flex: 1;
   min-width: 0;
 }
 
 .tb-group {
   display: flex;
+  flex: none;
   gap: 1px;
 }
 
@@ -1195,7 +1198,10 @@ details summary {
 
 /* Constraints on the selection, each with its own delete button. */
 .cons-list { padding: 0 12px; }
-.cons-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+.cons-row { display: flex; align-items: center; gap: 6px; padding: 2px 4px; margin: 0 -4px; border-radius: 4px; cursor: pointer; }
+.cons-row:hover,
+.cons-row.hover { background: #eef1f5; }
+.cons-row.sel { background: var(--accent-soft); color: var(--accent); }
 .cons-row span { flex: 1; }
 .cons-row.bad { color: #d93025; }
 .cons-row .x { border: 0; background: none; font-size: 16px; line-height: 1; color: var(--muted); cursor: pointer; padding: 0 4px; }
